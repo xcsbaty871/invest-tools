@@ -14,9 +14,31 @@
   body {
     background: var(--bg); color: var(--text);
     font-family: -apple-system, 'PingFang SC', sans-serif;
-    min-height: 100vh; padding: 20px 16px;
+    min-height: 100vh; padding: 0;
   }
-  .container { max-width: 900px; margin: 0 auto; }
+  .container { max-width: 900px; margin: 0 auto; padding: 0 16px 24px; }
+
+  /* ── Site Header ── */
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex; align-items: center; gap: 16px;
+    height: 52px; margin-bottom: 20px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 15px; font-weight: 700; }
+  .logo a { color: var(--accent); text-decoration: none; }
+  .logo a:hover { opacity: 0.8; }
+  .logo span { color: var(--dim); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  nav { display: flex; gap: 4px; margin-left: auto; }
+  nav a {
+    color: var(--dim); text-decoration: none;
+    padding: 5px 12px; border-radius: 6px; font-size: 13px;
+    transition: background 0.15s;
+  }
+  nav a:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  nav a.active { color: var(--accent); }
 
   .top-bar {
     display: flex; justify-content: space-between; align-items: center;
@@ -89,12 +111,21 @@
 </style>
 </head>
 <body>
+<header>
+  <div class="logo"><a href="index.html">投资工具箱<span>量化 · 价值 · 追踪</span></a></div>
+  <nav>
+    <a href="index.html">首页</a>
+    <a href="kronos.html">Kronos</a>
+    <a href="pork.html" class="active">猪肉股</a>
+    <a href="qdii-monitor.html">QDII监控</a>
+  </nav>
+</header>
 <div class="container">
 
   <div class="top-bar">
     <div>
-      <h1>🐷 猪肉股追踪</h1>
-      <div style="font-size:13px;color:var(--dim);margin-top:4px">A股猪肉产业链 · 实时行情</div>
+      <h1 style="font-size:20px;font-weight:800;background:linear-gradient(135deg,#ec4899,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px">🐷 猪肉股追踪</h1>
+      <div style="font-size:13px;color:var(--dim)">A股猪肉产业链 · 实时行情</div>
     </div>
     <div class="refresh-info" id="updateTime">数据更新时间: —</div>
   </div>

@@ -26,8 +26,30 @@
     color: var(--text);
     font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
     min-height: 100vh;
-    padding: 16px;
+    padding: 0;
   }
+
+  /* ── Site Header ── */
+  header {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex; align-items: center; gap: 16px;
+    height: 52px; margin-bottom: 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 15px; font-weight: 700; }
+  .logo a { color: var(--accent); text-decoration: none; }
+  .logo a:hover { opacity: 0.8; }
+  .logo span { color: var(--text-dim); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  nav { display: flex; gap: 4px; margin-left: auto; }
+  nav a {
+    color: var(--text-dim); text-decoration: none;
+    padding: 5px 12px; border-radius: 6px; font-size: 13px;
+    transition: background 0.15s;
+  }
+  nav a:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  nav a.active { color: var(--accent); }
 
   .header {
     max-width: 1200px;
@@ -347,7 +369,17 @@
 </style>
 </head>
 <body>
+<header>
+  <div class="logo"><a href="index.html">投资工具箱<span>量化 · 价值 · 追踪</span></a></div>
+  <nav>
+    <a href="index.html">首页</a>
+    <a href="kronos.html">Kronos</a>
+    <a href="pork.html">猪肉股</a>
+    <a href="qdii-monitor.html" class="active">QDII监控</a>
+  </nav>
+</header>
 
+<div style="padding:0 16px 16px">
 <div class="header">
   <h1>📊 QDII基金限购实时监控</h1>
   <div class="header-meta">
@@ -404,6 +436,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+</div><!-- end padding wrapper -->
 
 <script>
 // ─── 数据源 (feixia.org 2026-05-06) ───────────────────────────────────────

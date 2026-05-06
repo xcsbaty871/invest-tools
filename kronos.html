@@ -41,12 +41,14 @@
       top: 0;
       z-index: 100;
     }
-    .logo {
+    .logo a {
       font-size: 18px;
       font-weight: 700;
       color: var(--accent);
       letter-spacing: -0.5px;
+      text-decoration: none;
     }
+    .logo a:hover { opacity: 0.8; }
     .logo span { color: var(--text2); font-weight: 400; font-size: 14px; margin-left: 8px; }
     nav { display: flex; gap: 4px; margin-left: auto; }
     nav a {
@@ -350,7 +352,7 @@
 <body>
 
 <header>
-  <div class="logo">Kronos<span>均值回归 × LLM信号融合</span></div>
+  <div class="logo"><a href="index.html">Kronos<span>均值回归 × LLM信号融合</span></a></div>
   <nav>
     <a href="index.html">首页</a>
     <a href="kronos.html" class="active">Kronos 回测</a>
