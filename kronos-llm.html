@@ -296,6 +296,15 @@
     </div>
   </div>
 
+  <!-- 自定义问题 -->
+  <div style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--text2)">自定义提问（可选）：</span>
+      <span style="font-size:11px;color:var(--text2)">留空则使用默认分析模板</span>
+    </div>
+    <textarea id="customPrompt" rows="3" style="width:100%;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;outline:none;resize:vertical;font-family:inherit" placeholder="例如：牧原股份当前估值处于什么水平？猪周期拐点到了吗？"></textarea>
+  </div>
+
   <button class="btn" id="analyzeBtn" onclick="runAnalysis()" disabled>
     ▶ 开始 LLM 分析
   </button>
@@ -434,6 +443,18 @@ async function runAnalysis() {
 3. 行业周期定位
 4. 操作建议
 5. 风险提示`;
+  }
+
+  // 自定义问题：如果用户手动输入了内容，追加到 prompt 末尾
+  const customQ = document.getElementById('customPrompt').value.trim();
+  if (customQ) {
+    if (mode === 'local') {
+      // 本地模式：保留回测数据上下文，追加用户问题
+      userPrompt += `\n\n---\n用户额外提问：${customQ}`;
+    } else {
+      // 独立模式：只有股票上下文+用户问题
+      userPrompt = `标的: ${selectedStock.name} (${selectedStock.code})\n\n${customQ}`;
+    }
   }
 
   // 第二步：调用 LLM 分析
