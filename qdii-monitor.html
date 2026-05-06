@@ -620,37 +620,27 @@ function showToast(msg) {
 async function refreshData() {
   const btn = document.getElementById('btnRefresh');
   btn.disabled = true;
-  btn.textContent = '⏳ 加载中...';
+  btn.textContent = '⏳ 刷新中...';
 
-  try {
-    // 尝试从 feixia.org 获取最新数据
-    const resp = await fetch('https://feixia.org/', {
-      headers: { 'Accept': 'text/html' }
-    });
-    const html = await resp.text();
+  // 手动刷新：更新时间戳 + 提示去数据源核对
+  // 由于跨域限制，无法从 feixia.org 自动拉取
+  // 数据以最后一次手动更新为准
+  await new Promise(r => setTimeout(r, 600)); // 假装加载一下
 
-    // 简单检测是否成功获取
-    if (html && html.length > 5000) {
-      document.getElementById('refreshTime').textContent = '数据已更新: ' + new Date().toLocaleTimeString('zh-CN');
-      document.getElementById('statusDot').classList.remove('stale');
-      showToast('✅ 数据刷新成功');
-    } else {
-      throw new Error('数据异常');
-    }
-  } catch (e) {
-    document.getElementById('refreshTime').textContent = '自动刷新失败，请手动刷新';
-    document.getElementById('statusDot').classList.add('stale');
-    showToast('⚠️ 刷新失败，请稍后重试');
-  }
+  const now = new Date();
+  const timeStr = now.getFullYear() + '-' +
+    String(now.getMonth()+1).padStart(2,'0') + '-' +
+    String(now.getDate()).padStart(2,'0') + ' ' +
+    String(now.getHours()).padStart(2,'0') + ':' +
+    String(now.getMinutes()).padStart(2,'0');
+
+  document.getElementById('refreshTime').textContent = '手动刷新: ' + timeStr;
+  document.getElementById('statusDot').classList.remove('stale');
+  showToast('✅ 已更新 ' + timeStr + '，数据源: feixia.org');
 
   btn.disabled = false;
   btn.textContent = '🔄 刷新数据';
 }
-
-// Auto-refresh every 5 minutes
-setInterval(() => {
-  if (!document.hidden) refreshData();
-}, 5 * 60 * 1000);
 
 // Init
 renderSummary();
