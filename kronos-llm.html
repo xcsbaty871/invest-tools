@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kronos LLM 趋势预测</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --card2: #1c2128;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --purple: #bc8cff;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 56px;
+    }
+    .logo a {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+      text-decoration: none;
+    }
+    .logo span { color: var(--text2); font-weight: 400; font-size: 14px; margin-left: 8px; }
+    nav { display: flex; gap: 4px; margin-left: auto; }
+    nav a {
+      color: var(--text2);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      transition: background 0.15s;
+    }
+    nav a:hover { background: var(--card2); color: var(--text); }
+    nav a.active { color: var(--accent); }
+    .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
+    .page-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .page-desc { color: var(--text2); font-size: 14px; margin-bottom: 24px; }
+
+    /* API Key 设置 */
+    .api-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }
+    .api-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .api-row input {
+      flex: 1;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    .api-row input:focus { border-color: var(--accent); }
+    .api-status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .api-status.ok { background: rgba(63,185,80,0.15); color: var(--green); }
+    .api-status.fail { background: rgba(248,81,73,0.15); color: var(--red); }
+
+    /* 模型选择 */
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .model-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .model-card:hover { border-color: var(--accent); }
+    .model-card.selected {
+      border-color: var(--accent);
+      background: rgba(88,166,255,0.08);
+    }
+    .model-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .model-desc { font-size: 12px; color: var(--text2); }
+    .model-radio {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      margin-right: 8px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .model-card.selected .model-radio {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    /* 分析按钮 */
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* 分析结果 */
+    .result-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-top: 24px;
+      display: none;
+    }
+    .result-card.show { display: block; }
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .result-title { font-weight: 600; }
+    .result-model { font-size: 12px; color: var(--text2); }
+    .result-content {
+      font-size: 14px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+    .result-content h1, .result-content h2, .result-content h3 {
+      color: var(--accent);
+      margin: 16px 0 8px;
+    }
+    .result-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+    }
+    .result-content th, .result-content td {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+    .result-content th { background: var(--card2); }
+
+    /* 加载状态 */
+    .loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px;
+      gap: 12px;
+      color: var(--text2);
+    }
+    .loading.show { display: flex; }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 快捷股选择 */
+    .quick-stocks {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .quick-btn {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text2);
+      transition: all 0.15s;
+    }
+    .quick-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .quick-btn.active {
+      background: rgba(88,166,255,0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo"><a href="index.html">Kronos<span>均值回归 × LLM信号融合</span></a></div>
+  <nav>
+    <a href="index.html">首页</a>
+    <a href="kronos.html">Kronos 回测</a>
+    <a href="kronos-llm.html" class="active">LLM 预测</a>
+    <a href="pork.html">猪肉股</a>
+    <a href="qdii-monitor.html">QDII 监控</a>
+  </nav>
+</header>
+
+<div class="container">
+  <h1 class="page-title">LLM 趋势预测</h1>
+  <p class="page-desc">基于 SiliconFlow 大模型分析个股趋势。本地回测服务可用时自动加载回测数据，否则以独立模式运行。</p>
+
+  <!-- API Key 设置 -->
+  <div class="api-card">
+    <div class="api-row">
+      <input type="password" id="apiKey" placeholder="输入 SiliconFlow API Key">
+      <button class="btn" onclick="checkApiKey()">验证</button>
+      <span id="apiStatus" class="api-status fail">未配置</span>
+    </div>
+    <div style="font-size:12px; color:var(--text2); margin-top:8px">
+      获取 API Key: <a href="https://cloud.siliconflow.com" target="_blank" style="color:var(--accent)">cloud.siliconflow.com</a>
+      | DeepSeek-V4-Flash 性价比最高，推荐用于量化分析
+    </div>
+  </div>
+
+  <!-- 模型选择 -->
+  <div class="model-grid">
+    <div class="model-card selected" onclick="selectModel(this, 'deepseek-ai/DeepSeek-V4-Flash')">
+      <span class="model-radio"></span><span class="model-name">DeepSeek-V4-Flash</span>
+      <div class="model-desc">130B激活参数，快速响应，高性价比</div>
+    </div>
+    <div class="model-card" onclick="selectModel(this, 'deepseek-ai/DeepSeek-V4-Pro')">
+      <span class="model-radio"></span><span class="model-name">DeepSeek-V4-Pro</span>
+      <div class="model-desc">1.6T参数，复杂推理，深度分析</div>
+    </div>
+    <div class="model-card" onclick="selectModel(this, 'moonshotai/Kimi-K2.6')">
+      <span class="model-radio"></span><span class="model-name">Kimi-K2.6</span>
+      <div class="model-desc">1T上下文，多模态，长文档处理</div>
+    </div>
+    <div class="model-card" onclick="selectModel(this, 'zai-org/GLM-5.1')">
+      <span class="model-radio"></span><span class="model-name">GLM-5.1</span>
+      <div class="model-desc">744B参数，智能体，工具调用</div>
+    </div>
+    <div class="model-card" onclick="selectModel(this, 'MiniMaxAI/MiniMax-M2.5')">
+      <span class="model-radio"></span><span class="model-name">MiniMax-M2.5</span>
+      <div class="model-desc">229B参数，200K上下文</div>
+    </div>
+  </div>
+
+  <!-- 快捷股选择 -->
+  <div style="margin-bottom:16px">
+    <div style="font-size:12px; color:var(--text2); margin-bottom:8px">快速选择股票:</div>
+    <div class="quick-stocks">
+      <button class="quick-btn active" onclick="selectStock(this, '002714', '牧原股份')">牧原股份</button>
+      <button class="quick-btn" onclick="selectStock(this, '000858', '五粮液')">五粮液</button>
+      <button class="quick-btn" onclick="selectStock(this, '600519', '贵州茅台')">贵州茅台</button>
+      <button class="quick-btn" onclick="selectStock(this, '600900', '长江电力')">长江电力</button>
+      <button class="quick-btn" onclick="selectStock(this, '002460', '赣锋锂业')">赣锋锂业</button>
+      <button class="quick-btn" onclick="selectStock(this, '516670', '畜牧ETF')">畜牧ETF</button>
+    </div>
+  </div>
+
+  <button class="btn" id="analyzeBtn" onclick="runAnalysis()" disabled>
+    ▶ 开始 LLM 分析
+  </button>
+
+  <!-- 加载状态 -->
+  <div id="loadingBox" class="loading">
+    <div class="spinner"></div>
+    <span>LLM 分析中...</span>
+  </div>
+
+  <!-- 分析结果 -->
+  <div id="resultBox" class="result-card">
+    <div class="result-header">
+      <span class="result-title">📊 LLM 分析报告</span>
+      <span id="resultModel" class="result-model"></span>
+    </div>
+    <div id="resultContent" class="result-content"></div>
+  </div>
+</div>
+
+<script>
+const SERVER = 'http://127.0.0.1:5555';
+let selectedModel = 'deepseek-ai/DeepSeek-V4-Flash';
+let selectedStock = { code: '002714', name: '牧原股份' };
+
+function selectModel(el, model) {
+  document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedModel = model;
+}
+
+function selectStock(el, code, name) {
+  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  selectedStock = { code, name };
+}
+
+function checkApiKey() {
+  const key = document.getElementById('apiKey').value.trim();
+  const status = document.getElementById('apiStatus');
+  if (key && key.length > 20) {
+    status.textContent = '✓ 已配置';
+    status.className = 'api-status ok';
+    localStorage.setItem('sf_api_key', key);
+    document.getElementById('analyzeBtn').disabled = false;
+  } else {
+    status.textContent = '❌ 格式错误';
+    status.className = 'api-status fail';
+    document.getElementById('analyzeBtn').disabled = true;
+  }
+}
+
+async function runAnalysis() {
+  const btn = document.getElementById('analyzeBtn');
+  const loadingBox = document.getElementById('loadingBox');
+  const resultBox = document.getElementById('resultBox');
+  const resultContent = document.getElementById('resultContent');
+
+  btn.disabled = true;
+  loadingBox.classList.add('show');
+  resultBox.classList.remove('show');
+
+  const apiKey = localStorage.getItem('sf_api_key') || document.getElementById('apiKey').value.trim();
+
+  let mode = 'standalone'; // 'local' or 'standalone'
+  let systemPrompt = '';
+  let userPrompt = '';
+
+  // 第一步：尝获取回测数据（设短超时，GitHub Pages 上会快速失败）
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
+    const res = await fetch(`${SERVER}/api/kronos/backtest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stock: selectedStock.code,
+        start: '2025-01-01',
+        end: '2026-05-01',
+        lookback: 20,
+        temperature: 0.7,
+        pred_len: 30
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const backtestData = await res.json();
+      mode = 'local';
+      systemPrompt = `你是一位专业的A股量化交易分析师。基于回测数据给出客观的趋势预测和策略建议。
+要求：
+1. 基于数据说话，不要空泛废话
+2. 给出明确结论和操作建议
+3. 分析风险点和改进方向
+4. 格式清晰，用markdown
+5. 控制在500字以内`;
+      userPrompt = `分析以下回测数据，给出趋势预测：
+
+标的: ${selectedStock.name} (${selectedStock.code})
+时间: ${backtestData.meta.start_date} ~ ${backtestData.meta.end_date}
+
+核心指标:
+- 策略收益率: ${backtestData.metrics.total_return >= 0 ? '+' : ''}${backtestData.metrics.total_return}%
+- 基准收益率: ${backtestData.metrics.benchmark_return >= 0 ? '+' : ''}${backtestData.metrics.benchmark_return}%
+- 夏普比率: ${backtestData.metrics.sharpe_ratio}
+- 胜率: ${backtestData.metrics.win_rate}%
+- 方向准确率: ${backtestData.metrics.directional_accuracy}%
+- 最大回撤: ${backtestData.metrics.max_drawdown}%
+- 总交易: ${backtestData.metrics.total_trades}次
+
+请给出：
+1. 策略表现分析
+2. 下一交易日趋势预测（多/空/观望）
+3. 操作建议
+4. 风险提示`;
+    }
+  } catch(e) {
+    // 本地服务不可用→降级为独立模式
+  }
+
+  // 独立模式：无回测数据，直接靠 LLM 分析
+  if (mode === 'standalone') {
+    systemPrompt = `你是一位资深的A股基本面与技术面分析师。不依赖回测数据，基于公开市场信息给出分析。
+要求：
+1. 给出明确的多/空/观望判断
+2. 结合行业周期和估值水平分析
+3. 格式清晰，用markdown
+4. 控制在500字以内`;
+    userPrompt = `分析 ${selectedStock.name} (${selectedStock.code}) 的当前投资价值。
+
+请给出：
+1. 趋势判断（看多/看空/观望）
+2. 关键支撑与阻力位分析
+3. 行业周期定位
+4. 操作建议
+5. 风险提示`;
+  }
+
+  // 第二步：调用 LLM 分析
+  const llmRes = await fetch('https://api.siliconflow.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: selectedModel,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7
+    })
+  });
+
+    if (!llmRes.ok) {
+      const err = await llmRes.json();
+      throw new Error(err.error?.message || 'LLM API 调用失败');
+    }
+
+    const llmData = await llmRes.json();
+    const analysis = llmData.choices[0].message.content;
+
+    const modeLabel = mode === 'local' ? '🔧 本地回测模式' : '☁️ 独立分析模式（无回测数据）';
+    document.getElementById('resultModel').textContent = `${modeLabel} · 模型: ${selectedModel}`;
+    resultContent.innerHTML = marked.parse(analysis);
+    resultBox.classList.add('show');
+
+  } catch (e) {
+    resultContent.innerHTML = `<span style="color:var(--red)">❌ 分析失败: ${e.message}</span>
+    <br><br>可能原因:
+    <br>1. API Key 未配置或无效
+    <br>2. 网络连接问题
+    <br>3. 模型 ${selectedModel} 不可用`;
+    resultBox.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    loadingBox.classList.remove('show');
+  }
+}
+
+// 页面加载时检查本地存储的 API Key
+document.addEventListener('DOMContentLoaded', () => {
+  const savedKey = localStorage.getItem('sf_api_key');
+  if (savedKey) {
+    document.getElementById('apiKey').value = savedKey;
+    checkApiKey();
+  }
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</body>
+</html>
