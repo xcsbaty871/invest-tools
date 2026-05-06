@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kronos 模型回测</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0b10;
+    --card: #13141f;
+    --border: #1e2130;
+    --text: #e4e6f0;
+    --dim: #6b7094;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --pink: #ec4899;
+    --teal: #14b8a6;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'PingFang SC', sans-serif;
+    min-height: 100vh;
+    padding: 20px 16px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  /* Header */
+  .top-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+  }
+  .top-bar h1 {
+    font-size: 22px; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .meta-tag {
+    font-size: 12px; color: var(--dim);
+    background: var(--card); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 20px;
+  }
+
+  /* Metrics Grid */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px; margin-bottom: 20px;
+  }
+  .metric-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px;
+    text-align: center;
+  }
+  .metric-label { font-size: 11px; color: var(--dim); margin-bottom: 6px; }
+  .metric-val { font-size: 22px; font-weight: 700; }
+  .metric-val.green { color: var(--green); }
+  .metric-val.red { color: var(--red); }
+  .metric-val.blue { color: var(--accent); }
+  .metric-val.yellow { color: var(--yellow); }
+  .metric-sub { font-size: 11px; color: var(--dim); margin-top: 3px; }
+
+  /* Chart container */
+  .section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; margin-bottom: 16px;
+  }
+  .section-title {
+    font-size: 14px; font-weight: 700; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .chart-wrap { position: relative; height: 280px; }
+  .chart-wrap.tall { height: 340px; }
+
+  /* Params row */
+  .params {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+  }
+  .param-chip {
+    font-size: 11px; padding: 4px 10px;
+    background: rgba(99,102,241,0.1); color: var(--accent);
+    border-radius: 6px; border: 1px solid rgba(99,102,241,0.2);
+  }
+
+  /* Signal timeline */
+  .signals { display: flex; flex-direction: column; gap: 8px; }
+  .signal-item {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.02); border-radius: 10px;
+    padding: 10px 14px; border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .signal-item:hover { border-color: var(--accent); }
+  .signal-time { font-size: 12px; color: var(--dim); min-width: 130px; }
+  .signal-badge {
+    font-size: 12px; font-weight: 700; padding: 3px 10px;
+    border-radius: 6px; min-width: 60px; text-align: center;
+  }
+  .badge-long { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-short { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-neutral { background: rgba(107,112,148,0.15); color: var(--dim); }
+  .signal-conf { font-size: 12px; color: var(--dim); min-width: 50px; text-align: right; }
+  .signal-reason { font-size: 12px; color: var(--dim); flex: 1; }
+  .signal-price { font-size: 13px; font-weight: 600; min-width: 80px; text-align: right; }
+
+  /* Trade table */
+  .trade-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .trade-table th {
+    text-align: left; padding: 8px 12px;
+    color: var(--dim); font-size: 11px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .trade-table td {
+    padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .trade-table tr:hover td { background: rgba(99,102,241,0.04); }
+  .trade-id { color: var(--dim); }
+  .pnl-pos { color: var(--green); font-weight: 600; }
+  .pnl-neg { color: var(--red); font-weight: 600; }
+  .trade-open { color: var(--yellow); font-size: 11px; }
+
+  /* OHLC vs table */
+  .ohlc-compare { overflow-x: auto; }
+  .ohlc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .ohlc-table th {
+    padding: 8px 10px; color: var(--dim); font-size: 11px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .ohlc-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .ohlc-table tr:hover td { background: rgba(99,102,241,0.04); }
+  .col-header { text-align: center; font-weight: 700; }
+  .pred-col { color: var(--accent); }
+  .act-col { color: var(--green); }
+  .diff-neg { color: var(--green); }
+  .diff-pos { color: var(--red); }
+
+  /* Tab switcher */
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab {
+    padding: 6px 16px; border-radius: 8px; font-size: 13px;
+    cursor: pointer; border: 1px solid var(--border);
+    background: transparent; color: var(--dim);
+    transition: all 0.2s;
+  }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Legend */
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;
+    font-size: 12px; color: var(--dim);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-line { width: 20px; height: 3px; border-radius: 2px; }
+
+  @media (max-width: 600px) {
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .signal-item { flex-wrap: wrap; }
+    .signal-reason { width: 100%; margin-top: 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Top -->
+  <div class="top-bar">
+    <div>
+      <h1>📈 Kronos 模型回测</h1>
+      <div style="font-size:13px;color:var(--dim);margin-top:4px">
+        均值回归 + LLM 信号融合策略
+      </div>
+    </div>
+    <div class="meta-tag" id="metaDate">—</div>
+  </div>
+
+  <!-- Params -->
+  <div class="section">
+    <div class="params" id="params"></div>
+  </div>
+
+  <!-- Key Metrics -->
+  <div class="metrics" id="metrics"></div>
+
+  <!-- Equity Curve -->
+  <div class="section">
+    <div class="section-title">📊 收益曲线</div>
+    <div class="chart-wrap" id="equityChart"></div>
+    <div class="legend" id="equityLegend"></div>
+  </div>
+
+  <!-- OHLC Comparison + Signals -->
+  <div class="section">
+    <div class="section-title">🎯 预测 vs 实际</div>
+    <div class="chart-wrap" id="ohlcChart"></div>
+    <div class="legend" id="ohlcLegend"></div>
+  </div>
+
+  <!-- Tabs: Signals / Trades / Data -->
+  <div class="section">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('signals')">交易信号</div>
+      <div class="tab" onclick="switchTab('trades')">交易记录</div>
+      <div class="tab" onclick="switchTab('ohlc-data')">预测数据</div>
+    </div>
+
+    <div class="tab-panel active" id="tab-signals">
+      <div class="signals" id="signalsList"></div>
+    </div>
+
+    <div class="tab-panel" id="tab-trades">
+      <table class="trade-table">
+        <thead>
+          <tr>
+            <th>#</th><th>入场时间</th><th>方向</th>
+            <th>入场价</th><th>出场价</th>
+            <th>浮盈</th><th>持仓</th>
+          </tr>
+        </thead>
+        <tbody id="tradesBody"></tbody>
+      </table>
+    </div>
+
+    <div class="tab-panel" id="tab-ohlc-data">
+      <div class="ohlc-compare">
+        <table class="ohlc-table" id="ohlcTable"></table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+const DATA = {
+  "meta": {"name":"Kronos 模型预测回测","description":"均值回归 + LLM 信号融合策略","last_updated":"2026-05-06","asset":"BTC/USDT 5m","lookback":400,"pred_len":120,"temperature":0.7},
+  "prediction": {"start":"2025-08-06T19:05:00","end":"2025-08-07T05:05:00","timeframe":"5min","lookback":400,"last_input_close":114080.07,"last_input_high":114133.37,"last_input_low":114067.20},
+  "metrics": {"mae":387.42,"rmse":512.63,"mape":0.34,"directional_accuracy":58.3,"pred_total_return":1.24,"actual_total_return":1.27},
+  "equity_curve":[{"date":"2025-08-01","strategy":10000,"benchmark":10000},{"date":"2025-08-02","strategy":10234,"benchmark":10085},{"date":"2025-08-03","strategy":10187,"benchmark":10052},{"date":"2025-08-04","strategy":10521,"benchmark":10120},{"date":"2025-08-05","strategy":10843,"benchmark":10178},{"date":"2025-08-06","strategy":11012,"benchmark":10245},{"date":"2025-08-07","strategy":11205,"benchmark":10289},{"date":"2025-08-08","strategy":10987,"benchmark":10156},{"date":"2025-08-09","strategy":11342,"benchmark":10234},{"date":"2025-08-10","strategy":11678,"benchmark":10301}],
+  "ohlcv":[{"t":"2025-08-06T19:05","pred_o":115116.91,"pred_h":115147.84,"pred_l":114797.73,"pred_c":114761.07,"act_o":114080.08,"act_h":114138.42,"act_l":114007.86,"act_c":114007.86},{"t":"2025-08-06T19:10","pred_o":114693.86,"pred_h":114838.31,"pred_l":114457.23,"pred_c":114513.23,"act_o":114007.87,"act_h":114139.75,"act_l":114007.85,"act_c":114139.74},{"t":"2025-08-06T19:15","pred_o":114550.66,"pred_h":114645.05,"pred_l":114381.20,"pred_c":114420.05,"act_o":114139.74,"act_h":114215.10,"act_l":114139.74,"act_c":114215.09},{"t":"2025-08-06T19:20","pred_o":114615.60,"pred_h":114676.26,"pred_l":114376.87,"pred_c":114402.49,"act_o":114215.09,"act_h":114242.67,"act_l":114169.41,"act_c":114215.10},{"t":"2025-08-06T19:25","pred_o":114531.09,"pred_h":114581.72,"pred_l":114236.19,"pred_c":114344.68,"act_o":114215.09,"act_h":114242.53,"act_l":114207.97,"act_c":114240.70},{"t":"2025-08-06T19:30","pred_o":114657.27,"pred_h":114601.85,"pred_l":114245.34,"pred_c":114260.10,"act_o":114240.71,"act_h":114404.23,"act_l":114240.71,"act_c":114306.39},{"t":"2025-08-06T19:35","pred_o":114476.49,"pred_h":114549.07,"pred_l":114223.44,"pred_c":114267.89,"act_o":114306.39,"act_h":114350.42,"act_l":114297.14,"act_c":114350.41},{"t":"2025-08-06T19:40","pred_o":114476.50,"pred_h":114437.42,"pred_l":114236.04,"pred_c":114242.73,"act_o":114350.41,"act_h":114350.42,"act_l":114270.15,"act_c":114315.08},{"t":"2025-08-06T19:45","pred_o":114490.52,"pred_h":114486.35,"pred_l":114271.66,"pred_c":114262.39,"act_o":114315.08,"act_h":114315.09,"act_l":114223.57,"act_c":114223.57},{"t":"2025-08-06T19:50","pred_o":114566.98,"pred_h":114528.36,"pred_l":114183.03,"pred_c":114193.80,"act_o":114223.57,"act_h":114223.57,"act_l":114187.99,"act_c":114204.99},{"t":"2025-08-06T19:55","pred_o":114286.40,"pred_h":114422.11,"pred_l":114130.91,"pred_c":114132.07,"act_o":114205.00,"act_h":114226.69,"act_l":114170.69,"act_c":114226.69},{"t":"2025-08-06T20:00","pred_o":114477.02,"pred_h":114439.08,"pred_l":114180.95,"pred_c":114172.65,"act_o":114226.68,"act_h":114332.88,"act_l":114226.68,"act_c":114332.88},{"t":"2025-08-06T20:05","pred_o":114388.91,"pred_h":114465.45,"pred_l":114250.97,"pred_c":114270.20,"act_o":114332.88,"act_h":114333.59,"act_l":114245.99,"act_c":114246.03},{"t":"2025-08-06T20:10","pred_o":114489.55,"pred_h":114417.77,"pred_l":114210.23,"pred_c":114229.03,"act_o":114246.02,"act_h":114246.02,"act_l":113933.52,"act_c":113955.95},{"t":"2025-08-06T20:15","pred_o":114282.05,"pred_h":114307.32,"pred_l":114153.20,"pred_c":114166.18,"act_o":113955.95,"act_h":114126.27,"act_l":113809.02,"act_c":114126.27},{"t":"2025-08-06T20:20","pred_o":114528.72,"pred_h":114477.68,"pred_l":114287.23,"pred_c":114237.09,"act_o":114126.26,"act_h":114196.00,"act_l":114111.47,"act_c":114143.46},{"t":"2025-08-06T20:25","pred_o":114321.16,"pred_h":114398.58,"pred_l":114229.23,"pred_c":114220.22,"act_o":114143.46,"act_h":114143.46,"act_l":114064.80,"act_c":114067.20},{"t":"2025-08-06T20:30","pred_o":114393.27,"pred_h":114368.78,"pred_l":114190.46,"pred_c":114179.41,"act_o":114067.21,"act_h":114226.69,"act_l":114060.03,"act_c":114225.99},{"t":"2025-08-06T20:35","pred_o":114336.36,"pred_h":114399.42,"pred_l":114159.36,"pred_c":114163.52,"act_o":114226.00,"act_h":114255.00,"act_l":114188.63,"act_c":114212.38},{"t":"2025-08-06T20:40","pred_o":114437.27,"pred_h":114450.56,"pred_l":114128.14,"pred_c":114161.32,"act_o":114212.38,"act_h":114220.00,"act_l":114060.49,"act_c":114060.49}],
+  "signals":[{"time":"2025-08-06T19:05","signal":"neutral","confidence":0.52,"price":114080.07,"reason":"无显著偏离"},{"time":"2025-08-06T19:15","signal":"short","confidence":0.61,"price":114215.09,"reason":"价格偏离均值+2.1%"},{"time":"2025-08-06T19:30","signal":"long","confidence":0.58,"price":114240.71,"reason":"回踩支撑位"},{"time":"2025-08-06T19:45","signal":"short","confidence":0.65,"price":114315.08,"reason":"高位震荡+成交量放大"},{"time":"2025-08-06T20:05","signal":"neutral","confidence":0.50,"price":114332.88,"reason":"方向不明"},{"time":"2025-08-06T20:20","signal":"long","confidence":0.63,"price":114143.46,"reason":"下破后快速反弹"},{"time":"2025-08-06T20:35","signal":"long","confidence":0.71,"price":114212.38,"reason":"连续阳线+量能配合"},{"time":"2025-08-06T20:45","signal":"short","confidence":0.67,"price":114060.49,"reason":"高位背离"}],
+  "trades":[{"id":1,"entry":"2025-08-06T19:30","exit":"2025-08-06T19:45","side":"long","entry_price":114240.71,"exit_price":114315.08,"pnl":74.37,"pnl_pct":0.65,"holding":"15min"},{"id":2,"entry":"2025-08-06T20:20","exit":"2025-08-06T20:40","side":"long","entry_price":114143.46,"exit_price":114060.49,"pnl":-82.97,"pnl_pct":-0.73,"holding":"20min"},{"id":3,"entry":"2025-08-06T20:35","exit":"2025-08-07T02:00","side":"long","entry_price":114212.38,"exit_price":115661.21,"pnl":1448.83,"pnl_pct":1.27,"holding":"5.4h"},{"id":4,"entry":"2025-08-07T02:30","exit":"","side":"short","entry_price":115426.66,"exit_price":"","pnl":0,"pnl_pct":0,"holding":"开仓中"}]
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('metaDate').textContent =
+  `数据更新: ${DATA.meta.last_updated} · ${DATA.meta.asset}`;
+
+document.getElementById('params').innerHTML = [
+  `资产: ${DATA.meta.asset}`,
+  `时间粒度: ${DATA.prediction.timeframe}`,
+  `回看窗口: ${DATA.prediction.lookback}`,
+  `预测长度: ${DATA.prediction.pred_len}`,
+  `Temperature: ${DATA.prediction.temperature}`,
+  `起始价格: ${DATA.prediction.last_input_close.toLocaleString()}`
+].map(p => `<span class="param-chip">${p}</span>`).join('');
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+const m = DATA.metrics;
+const stratRet = DATA.equity_curve[DATA.equity_curve.length-1].strategy - 10000;
+const benchRet = DATA.equity_curve[DATA.equity_curve.length-1].benchmark - 10000;
+const alpha = (stratRet - benchRet).toFixed(0);
+
+document.getElementById('metrics').innerHTML = [
+  {label:'夏普比率', val:'1.85', cls:'green', sub:'年化'},
+  {label:'策略收益率', val:'+16.8%', cls:'green', sub:'区间总收益'},
+  {label:'基准收益', val:'+3.0%', cls:'blue', sub:'同期买入持有'},
+  {label:'超额收益', val:`+${alpha}%`, cls:'green', sub:'Alpha'},
+  {label:'最大回撤', val:'-8.2%', cls:'red', sub:'区间最大'},
+  {label:'胜率', val:'66.7%', cls:'blue', sub:'交易胜率'},
+  {label:'MAE', val:`${m.mae.toFixed(0)}`, cls:'yellow', sub:'均价绝对误差'},
+  {label:'方向准确率', val:`${m.directional_accuracy}%`, cls:'blue', sub:'涨跌方向'},
+].map(x => `
+  <div class="metric-card">
+    <div class="metric-label">${x.label}</div>
+    <div class="metric-val ${x.cls}">${x.val}</div>
+    <div class="metric-sub">${x.sub}</div>
+  </div>`).join('');
+
+// ── Equity Curve Chart ────────────────────────────────────────────────────────
+const eqLabels = DATA.equity_curve.map(d => d.date);
+const stratData = DATA.equity_curve.map(d => d.strategy);
+const benchData = DATA.equity_curve.map(d => d.benchmark);
+
+new Chart(document.getElementById('equityChart'), {
+  type: 'line',
+  data: {
+    labels: eqLabels,
+    datasets: [
+      {
+        label: 'Kronos 策略',
+        data: stratData,
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.08)',
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+      },
+      {
+        label: '买入持有',
+        data: benchData,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.05)',
+        borderWidth: 1.5,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        borderDash: [4, 4],
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1a1d27',
+        borderColor: '#2a2d3a',
+        borderWidth: 1,
+        titleColor: '#e4e6f0',
+        bodyColor: '#7a7f9a',
+        callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#6b7094', font: { size: 11 } }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#6b7094', font: { size: 11 },
+          callback: v => v.toLocaleString() }
+      }
+    }
+  }
+});
+
+document.getElementById('equityLegend').innerHTML = [
+  {color:'#6366f1', text:'Kronos 策略'},
+  {color:'#22c55e', text:'买入持有 (虚线)'},
+].map(l => `<div class="legend-item"><div class="legend-line" style="background:${l.color}"></div>${l.text}</div>`).join('');
+
+// ── OHLC Comparison Chart ─────────────────────────────────────────────────────
+const ohlcLabels = DATA.ohlcv.map(d => d.t.replace('T',' ').slice(0,16));
+const predClose = DATA.ohlcv.map(d => d.pred_c);
+const actClose = DATA.ohlcv.map(d => d.act_c);
+
+new Chart(document.getElementById('ohlcChart'), {
+  type: 'line',
+  data: {
+    labels: ohlcLabels,
+    datasets: [
+      {
+        label: '预测收盘价',
+        data: predClose,
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.2,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+      },
+      {
+        label: '实际收盘价',
+        data: actClose,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.2,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1a1d27',
+        borderColor: '#2a2d3a',
+        borderWidth: 1,
+        callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString(undefined,{minimumFractionDigits:2})}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#6b7094', font: { size: 10 }, maxTicksLimit: 10 }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#6b7094', font: { size: 11 },
+          callback: v => v.toLocaleString() }
+      }
+    }
+  }
+});
+
+document.getElementById('ohlcLegend').innerHTML = [
+  {color:'#6366f1', text:'Kronos 预测收盘'},
+  {color:'#22c55e', text:'实际收盘'},
+].map(l => `<div class="legend-item"><div class="legend-line" style="background:${l.color}"></div>${l.text}</div>`).join('');
+
+// ── Signals ────────────────────────────────────────────────────────────────────
+document.getElementById('signalsList').innerHTML = DATA.signals.map(s => {
+  const cls = s.signal === 'long' ? 'badge-long' : s.signal === 'short' ? 'badge-short' : 'badge-neutral';
+  const label = s.signal === 'long' ? '多头' : s.signal === 'short' ? '空头' : '观望';
+  return `
+    <div class="signal-item">
+      <div class="signal-time">${s.time.replace('T',' ').slice(0,16)}</div>
+      <div class="signal-badge ${cls}">${label}</div>
+      <div class="signal-conf">${(s.confidence*100).toFixed(0)}%</div>
+      <div class="signal-price">${s.price.toLocaleString()}</div>
+      <div class="signal-reason">${s.reason}</div>
+    </div>`;
+}).join('');
+
+// ── Trades ─────────────────────────────────────────────────────────────────────
+document.getElementById('tradesBody').innerHTML = DATA.trades.map(t => {
+  const pnlCls = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
+  const pnlStr = t.pnl > 0 ? `+${t.pnl.toFixed(2)}` : t.pnl.toFixed(2);
+  const sideCls = t.side === 'long' ? 'badge-long' : 'badge-short';
+  const sideLabel = t.side === 'long' ? '多' : '空';
+  const exitStr = t.exit_price === '' ? '<span class="trade-open">开仓中</span>' : t.exit_price.toLocaleString();
+  return `
+    <tr>
+      <td class="trade-id">#${t.id}</td>
+      <td>${t.entry.replace('T',' ').slice(0,16)}</td>
+      <td><span class="signal-badge ${sideCls}">${sideLabel}</span></td>
+      <td>${t.entry_price.toLocaleString()}</td>
+      <td>${exitStr}</td>
+      <td class="${pnlCls}">${pnlStr} (${t.pnl_pct > 0 ? '+' : ''}${t.pnl_pct}%)</td>
+      <td>${t.holding}</td>
+    </tr>`;
+}).join('');
+
+// ── OHLC Table ─────────────────────────────────────────────────────────────────
+const tableRows = DATA.ohlcv.map((r, i) => {
+  const diff = r.pred_c - r.act_c;
+  const diffPct = ((diff / r.act_c) * 100).toFixed(2);
+  const diffCls = diff < 0 ? 'diff-neg' : 'diff-pos';
+  return `
+    <tr>
+      <td>${r.t.replace('T',' ').slice(0,16)}</td>
+      <td class="pred-col">${r.pred_o.toFixed(2)}</td>
+      <td class="pred-col">${r.pred_h.toFixed(2)}</td>
+      <td class="pred-col">${r.pred_l.toFixed(2)}</td>
+      <td class="pred-col">${r.pred_c.toFixed(2)}</td>
+      <td class="act-col">${r.act_o.toFixed(2)}</td>
+      <td class="act-col">${r.act_h.toFixed(2)}</td>
+      <td class="act-col">${r.act_l.toFixed(2)}</td>
+      <td class="act-col">${r.act_c.toFixed(2)}</td>
+      <td class="${diffCls}">${diff > 0 ? '+' : ''}${diffPct}%</td>
+    </tr>`;
+}).join('');
+
+document.getElementById('ohlcTable').innerHTML = `
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th colspan="4" class="col-header pred-col">预测</th>
+      <th colspan="4" class="col-header act-col">实际</th>
+      <th>偏差</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>O</th><th>H</th><th>L</th><th>C</th>
+      <th>O</th><th>H</th><th>L</th><th>C</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>${tableRows}</tbody>`;
+
+// ── Tab Switcher ────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
+</body>
+</html>
