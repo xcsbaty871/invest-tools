@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投资工具箱</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0b10;
+    --card-bg: #13141f;
+    --border: #22243a;
+    --text: #e4e6f0;
+    --text-dim: #6b7094;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --pink: #ec4899;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+
+  .container { max-width: 800px; margin: 0 auto; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    margin-bottom: 48px;
+    padding-top: 32px;
+  }
+
+  .hero-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+
+  .hero p {
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+
+  /* Cards */
+  .section-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  .tools-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-bottom: 48px;
+  }
+
+  .tool-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    text-decoration: none;
+    color: var(--text);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .tool-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(99,102,241,0.1);
+  }
+
+  .tool-icon {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .tool-icon.purple { background: rgba(99,102,241,0.15); }
+  .tool-icon.green  { background: rgba(34,197,94,0.15); }
+  .tool-icon.pink   { background: rgba(236,72,153,0.15); }
+  .tool-icon.blue   { background: rgba(59,130,246,0.15); }
+  .tool-icon.yellow { background: rgba(234,179,8,0.15); }
+  .tool-icon.cyan   { background: rgba(6,182,212,0.15); }
+
+  .tool-info { flex: 1; }
+
+  .tool-name {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .tool-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .tool-arrow {
+    color: var(--text-dim);
+    font-size: 18px;
+    transition: all 0.2s;
+  }
+
+  .tool-card:hover .tool-arrow {
+    color: var(--accent);
+    transform: translateX(3px);
+  }
+
+  .tag-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(99,102,241,0.1);
+    color: var(--accent);
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 32px 0;
+    color: var(--text-dim);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    .hero h1 { font-size: 24px; }
+    .tool-card { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-icon">🧰</div>
+    <h1>投资工具箱</h1>
+    <p>快捷入口 · 实时数据 · 免费使用</p>
+  </div>
+
+  <!-- QDII 工具 -->
+  <div class="section-title">QDII 基金</div>
+  <div class="tools-grid">
+
+    <a class="tool-card" href="qdii-monitor.html">
+      <div class="tool-icon purple">📊</div>
+      <div class="tool-info">
+        <div class="tool-name">QDII基金限购实时监控</div>
+        <div class="tool-desc">纳斯达克100 / 标普500 场外基金申购限额一览，实时刷新</div>
+        <div class="tag-row">
+          <span class="tag">实时</span>
+          <span class="tag">限购</span>
+          <span class="tag">QDII</span>
+        </div>
+      </div>
+      <div class="tool-arrow">→</div>
+    </a>
+
+  </div>
+
+  <!-- 量化工具 -->
+  <div class="section-title">量化研究</div>
+  <div class="tools-grid">
+
+    <div class="tool-card" style="opacity:0.5; cursor:default;">
+      <div class="tool-icon green">📈</div>
+      <div class="tool-info">
+        <div class="tool-name">Kronos 模型回测 <span style="font-size:12px;color:var(--text-dim)">（开发中）</span></div>
+        <div class="tool-desc">均值回归与 LLM 信号融合策略回测平台</div>
+        <div class="tag-row">
+          <span class="tag">回测</span>
+          <span class="tag">A股</span>
+          <span class="tag">Kronos</span>
+        </div>
+      </div>
+      <div class="tool-arrow">→</div>
+    </a>
+
+    <div class="tool-card" style="opacity:0.5; cursor:default;">
+      <div class="tool-icon pink">🐷</div>
+      <div class="tool-info">
+        <div class="tool-name">猪肉股追踪 <span style="font-size:12px;color:var(--text-dim)">（开发中）</span></div>
+        <div class="tool-desc">猪肉产业链个股监控与价值投资信号</div>
+        <div class="tag-row">
+          <span class="tag">周期</span>
+          <span class="tag">价值投资</span>
+        </div>
+      </div>
+      <div class="tool-arrow">→</div>
+    </a>
+
+  </div>
+
+  <!-- 资料工具 -->
+  <div class="section-title">资料 & 笔记</div>
+  <div class="tools-grid">
+
+    <div class="tool-card" style="opacity:0.5; cursor:default;">
+      <div class="tool-icon blue">📚</div>
+      <div class="tool-info">
+        <div class="tool-name">读书笔记库 <span style="font-size:12px;color:var(--text-dim)">（开发中）</span></div>
+        <div class="tool-desc">Obsidian 笔记同步展示，含《从地名解读世界史的兴亡》等</div>
+        <div class="tag-row">
+          <span class="tag">Obsidian</span>
+          <span class="tag">历史</span>
+        </div>
+      </div>
+      <div class="tool-arrow">→</div>
+    </a>
+
+  </div>
+
+  <div class="footer">
+    由 WorkBuddy 驱动 · <span id="date"></span>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('date').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>

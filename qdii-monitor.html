@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QDII基金限购实时监控</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --card-bg: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e0e3ed;
+    --text-dim: #7a7f9a;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --pink: #ec4899;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    min-height: 100vh;
+    padding: 16px;
+  }
+
+  .header {
+    max-width: 1200px;
+    margin: 0 auto 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .refresh-time {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  .dot.stale { background: var(--yellow); animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .btn-refresh {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-refresh:hover { background: #5558e8; transform: scale(1.02); }
+  .btn-refresh:active { transform: scale(0.98); }
+  .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .tabs {
+    max-width: 1200px;
+    margin: 0 auto 16px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-dim);
+    transition: all 0.2s;
+  }
+  .tab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .tab:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+
+  .summary-bar {
+    max-width: 1200px;
+    margin: 0 auto 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .summary-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .summary-card .label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .summary-card .value {
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .summary-card .value.green { color: var(--green); }
+  .summary-card .value.yellow { color: var(--yellow); }
+  .summary-card .value.red { color: var(--red); }
+  .summary-card .value.blue { color: var(--blue); }
+
+  .grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(99,102,241,0.12);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .card-code {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .limit-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .limit-badge.red-bg { background: rgba(239,68,68,0.15); color: var(--red); }
+  .limit-badge.yellow-bg { background: rgba(234,179,8,0.15); color: var(--yellow); }
+  .limit-badge.green-bg { background: rgba(34,197,94,0.15); color: var(--green); }
+  .limit-badge.blue-bg { background: rgba(59,130,246,0.15); color: var(--blue); }
+
+  .card-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .stat {
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+  }
+
+  .stat-value {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .tag-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(99,102,241,0.12);
+    color: var(--accent);
+  }
+
+  .tag.paused {
+    background: rgba(239,68,68,0.12);
+    color: var(--red);
+  }
+
+  .card.paused {
+    opacity: 0.6;
+    border-color: rgba(239,68,68,0.3);
+  }
+
+  .progress-bar {
+    margin-top: 10px;
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  .filter-row {
+    max-width: 1200px;
+    margin: 0 auto 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .filter-select {
+    background: var(--card-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .search-input {
+    background: var(--card-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    flex: 1;
+    min-width: 160px;
+    max-width: 300px;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 14px;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-dim);
+    font-size: 14px;
+    grid-column: 1 / -1;
+  }
+
+  .legend {
+    max-width: 1200px;
+    margin: 20px auto 0;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 16px; }
+    .summary-bar { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📊 QDII基金限购实时监控</h1>
+  <div class="header-meta">
+    <div class="refresh-time">
+      <div class="dot" id="statusDot"></div>
+      <span id="refreshTime">—</span>
+    </div>
+    <button class="btn-refresh" id="btnRefresh" onclick="refreshData()">
+      🔄 刷新数据
+    </button>
+  </div>
+</div>
+
+<div class="summary-bar" id="summaryBar">
+  <!-- filled by JS -->
+</div>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" onclick="setTab('all')">全部</div>
+  <div class="tab" onclick="setTab('nasdaq')">纳斯达克100</div>
+  <div class="tab" onclick="setTab('sp500')">标普500</div>
+</div>
+
+<div class="filter-row">
+  <select class="filter-select" id="filterLimit" onchange="applyFilters()">
+    <option value="all">全部额度</option>
+    <option value="500+">限购 ≥ 500元</option>
+    <option value="200+">限购 ≥ 200元</option>
+    <option value="100+">限购 ≥ 100元</option>
+    <option value="50+">限购 ≥ 50元</option>
+    <option value="10">限购 = 10元</option>
+    <option value="paused">仅看暂停</option>
+    <option value="open">仅看可申购</option>
+  </select>
+  <select class="filter-select" id="filterSort" onchange="applyFilters()">
+    <option value="limit-desc">额度: 高 → 低</option>
+    <option value="limit-asc">额度: 低 → 高</option>
+    <option value="return-desc">涨幅: 高 → 低</option>
+    <option value="return-asc">涨幅: 低 → 高</option>
+    <option value="scale-desc">规模: 大 → 小</option>
+  </select>
+  <input class="search-input" type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码..." oninput="applyFilters()">
+</div>
+
+<div class="grid" id="cardGrid">
+  <!-- filled by JS -->
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> 限购 ≥ 100元</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div> 限购 50元</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> 限购 10元</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> 暂停申购</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── 数据源 (feixia.org 2026-05-06) ───────────────────────────────────────
+const rawData = [
+  // 纳斯达克100
+  { name: "大成纳斯达克100ETF联接(QDII)A", code: "000834", type: "nasdaq", limit: 500, status: "open", ret: 31.10, scale: 34.53 },
+  { name: "大成纳斯达克100ETF联接(QDII)C", code: "008971", type: "nasdaq", limit: 500, status: "open", ret: 30.70, scale: 6.85 },
+  { name: "南方纳斯达克100指数发起(QDII)A", code: "016452", type: "nasdaq", limit: 200, status: "open", ret: 29.59, scale: 31.11 },
+  { name: "南方纳斯达克100指数发起(QDII)C", code: "016453", type: "nasdaq", limit: 200, status: "open", ret: 29.44, scale: 32.50 },
+  { name: "宝盈纳斯达克100指数发起(QDII)A", code: "019736", type: "nasdaq", limit: 100, status: "open", ret: 29.16, scale: 5.68 },
+  { name: "宝盈纳斯达克100指数发起(QDII)C", code: "019737", type: "nasdaq", limit: 100, status: "open", ret: 28.83, scale: 2.54 },
+  { name: "汇添富纳斯达克100ETF联接A", code: "018966", type: "nasdaq", limit: 100, status: "open", ret: 27.86, scale: 10.35 },
+  { name: "汇添富纳斯达克100ETF联接C", code: "018967", type: "nasdaq", limit: 100, status: "open", ret: 27.35, scale: 8.81 },
+  { name: "建信纳斯达克100指数QDIIA", code: "539001", type: "nasdaq", limit: 100, status: "open", ret: 29.17, scale: 16.24 },
+  { name: "建信纳斯达克100指数(QDII)C", code: "012752", type: "nasdaq", limit: 100, status: "open", ret: 28.77, scale: 9.49 },
+  { name: "摩根纳斯达克100指数(QDII)人民币A", code: "019172", type: "nasdaq", limit: 100, status: "open", ret: 30.26, scale: 21.78 },
+  { name: "摩根纳斯达克100指数(QDII)人民币C", code: "019173", type: "nasdaq", limit: 100, status: "open", ret: 29.87, scale: 8.94 },
+  { name: "天弘纳斯达克100指数发起(QDII)A", code: "018043", type: "nasdaq", limit: 100, status: "open", ret: 30.14, scale: 21.86 },
+  { name: "天弘纳斯达克100指数发起(QDII)C", code: "018044", type: "nasdaq", limit: 100, status: "open", ret: 29.88, scale: 24.11 },
+  { name: "招商纳斯达克100ETF发起式QDII(A类)", code: "019547", type: "nasdaq", limit: 100, status: "open", ret: 29.24, scale: 16.52 },
+  { name: "招商纳斯达克100ETF发起式QDII(C类)", code: "019548", type: "nasdaq", limit: 100, status: "open", ret: 28.73, scale: 12.73 },
+  { name: "万家纳斯达克100指数发起式(QDII)A", code: "019441", type: "nasdaq", limit: 50, status: "open", ret: 29.09, scale: 4.38 },
+  { name: "万家纳斯达克100指数发起式(QDII)C", code: "019442", type: "nasdaq", limit: 50, status: "open", ret: 28.83, scale: 2.08 },
+  { name: "广发纳斯达克100ETF联接(QDII)A", code: "270042", type: "nasdaq", limit: 10, status: "open", ret: 30.74, scale: 97.16 },
+  { name: "广发纳斯达克100ETF联接(QDII)C", code: "006479", type: "nasdaq", limit: 10, status: "open", ret: 30.49, scale: 53.93 },
+  { name: "华安纳斯达克100ETF联接(QDII)A", code: "040046", type: "nasdaq", limit: 10, status: "open", ret: 30.83, scale: 47.03 },
+  { name: "华安纳斯达克100ETF联接(QDII)C", code: "014978", type: "nasdaq", limit: 10, status: "open", ret: 30.57, scale: 11.64 },
+  { name: "华泰柏瑞纳斯达克100ETF联接基金QDII A", code: "019524", type: "nasdaq", limit: 10, status: "open", ret: 28.89, scale: 7.02 },
+  { name: "华泰柏瑞纳斯达克100ETF联接基金QDII C", code: "019525", type: "nasdaq", limit: 10, status: "open", ret: 28.56, scale: 6.38 },
+  { name: "国泰纳斯达克100指数QDII", code: "160213", type: "nasdaq", limit: 0, status: "paused", ret: 31.78, scale: 16.36 },
+  { name: "易方达纳斯达克100ETF联接A人民币", code: "161130", type: "nasdaq", limit: 0, status: "paused", ret: 29.43, scale: 15.17 },
+  { name: "嘉实纳斯达克100联接(QDII)A人民币", code: "016532", type: "nasdaq", limit: 0, status: "paused", ret: 29.26, scale: 18.86 },
+  { name: "华夏纳斯达克100ETF发起式联接(QDII)A", code: "015299", type: "nasdaq", limit: 0, status: "paused", ret: 29.06, scale: 3.15 },
+  { name: "嘉实纳斯达克100联接(QDII)C人民币", code: "016533", type: "nasdaq", limit: 0, status: "paused", ret: 28.93, scale: 15.78 },
+  { name: "易方达纳斯达克100ETF联接C人民币", code: "012870", type: "nasdaq", limit: 0, status: "paused", ret: 29.03, scale: 1.86 },
+  { name: "华夏纳斯达克100ETF发起式联接(QDII)C", code: "015300", type: "nasdaq", limit: 0, status: "paused", ret: 28.66, scale: 1.67 },
+  // 标普500
+  { name: "博时标普500ETF联接(QDII)A", code: "050025", type: "sp500", limit: 100, status: "open", ret: 21.60, scale: 59.27 },
+  { name: "博时标普500ETF联接(QDII)C", code: "006075", type: "sp500", limit: 100, status: "open", ret: 21.17, scale: 12.41 },
+  { name: "摩根标普500指数(QDII)人民币A", code: "017641", type: "sp500", limit: 100, status: "open", ret: 21.18, scale: 36.62 },
+  { name: "摩根标普500指数(QDII)人民币C", code: "019305", type: "sp500", limit: 100, status: "open", ret: 20.82, scale: 14.18 },
+  { name: "天弘标普500A", code: "007721", type: "sp500", limit: 100, status: "open", ret: 20.61, scale: 22.29 },
+  { name: "天弘标普500C", code: "007722", type: "sp500", limit: 100, status: "open", ret: 20.32, scale: 14.80 },
+  { name: "易方达标普500指数(QDII-LOF)A人民币", code: "161125", type: "sp500", limit: 0, status: "paused", ret: 21.27, scale: 14.47 },
+  { name: "华夏标普500ETF发起式联接(QDII)A", code: "018064", type: "sp500", limit: 0, status: "paused", ret: 19.97, scale: 3.39 },
+  { name: "易方达标普500人民币C类QDII", code: "012860", type: "sp500", limit: 0, status: "paused", ret: 20.81, scale: 1.40 },
+  { name: "国泰标普500ETF发起联接(QDII)A", code: "017028", type: "sp500", limit: 0, status: "paused", ret: 19.95, scale: 1.32 },
+  { name: "华夏标普500ETF发起式联接(QDII)C", code: "018065", type: "sp500", limit: 0, status: "paused", ret: 19.61, scale: 1.83 },
+  { name: "国泰标普500ETF发起联接(QDII)C", code: "017030", type: "sp500", limit: 0, status: "paused", ret: 19.59, scale: 0.65 },
+];
+
+let currentTab = 'all';
+let filtered = [...rawData];
+
+function formatScale(s) {
+  if (s >= 100) return s.toFixed(1) + '亿';
+  if (s >= 10) return s.toFixed(1) + '亿';
+  if (s >= 1) return s.toFixed(2) + '亿';
+  return s.toFixed(2) + '亿';
+}
+
+function getLimitColor(limit, status) {
+  if (status === 'paused') return { bg: 'red-bg', text: '🔴 暂停', color: 'var(--red)' };
+  if (limit >= 100) return { bg: 'green-bg', text: limit + '元/天', color: 'var(--green)' };
+  if (limit === 50) return { bg: 'yellow-bg', text: '50元/天', color: 'var(--yellow)' };
+  return { bg: 'blue-bg', text: '10元/天', color: 'var(--blue)' };
+}
+
+function getProgressWidth(limit, status) {
+  if (status === 'paused') return 0;
+  return Math.min(100, (limit / 500) * 100);
+}
+
+function getProgressColor(limit, status) {
+  if (status === 'paused') return 'var(--red)';
+  if (limit >= 100) return 'var(--green)';
+  if (limit === 50) return 'var(--yellow)';
+  return 'var(--blue)';
+}
+
+function renderCard(f) {
+  const lc = getLimitColor(f.limit, f.status);
+  const typeLabel = f.type === 'nasdaq' ? '纳指100' : '标普500';
+  const typeColor = f.type === 'nasdaq' ? 'var(--accent)' : 'var(--pink)';
+  const retColor = f.ret >= 25 ? 'var(--green)' : f.ret >= 20 ? 'var(--blue)' : 'var(--text)';
+  const progressW = getProgressWidth(f.limit, f.status);
+  const progressColor = getProgressColor(f.limit, f.status);
+
+  return `
+    <div class="card ${f.status === 'paused' ? 'paused' : ''}">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${f.name.replace('(QDII)', '').replace('(QDII-LOF)', '').replace('ETF联接', 'ETF联').replace('指数发起式', '指数')}</div>
+          <div class="card-code">${f.code}</div>
+        </div>
+        <div class="limit-badge ${lc.bg}">${lc.text}</div>
+      </div>
+      <div class="card-stats">
+        <div class="stat">
+          <div class="stat-label">近一年涨幅</div>
+          <div class="stat-value" style="color:${retColor}">+${f.ret.toFixed(2)}%</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">基金规模</div>
+          <div class="stat-value">${formatScale(f.scale)}</div>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${progressW}%;background:${progressColor}"></div>
+      </div>
+      <div class="tag-row" style="margin-top:10px">
+        <span class="tag" style="background:${typeColor}22;color:${typeColor}">${typeLabel}</span>
+        ${f.status === 'paused' ? '<span class="tag paused">暂停申购</span>' : ''}
+        ${f.limit === 10 ? '<span class="tag" style="background:rgba(234,179,8,0.12);color:var(--yellow)">⚠️ 限额极低</span>' : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderSummary() {
+  const nasdaq = rawData.filter(f => f.type === 'nasdaq');
+  const sp = rawData.filter(f => f.type === 'sp500');
+  const paused = rawData.filter(f => f.status === 'paused').length;
+  const open = rawData.filter(f => f.status === 'open').length;
+  const bestNasdaq = Math.max(...nasdaq.filter(f => f.status === 'open').map(f => f.limit));
+  const bestSp = Math.max(...sp.filter(f => f.status === 'open').map(f => f.limit));
+
+  const html = `
+    <div class="summary-card">
+      <div class="label">纳指100可申购</div>
+      <div class="value green">${nasdaq.filter(f => f.status === 'open').length}只</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">标普500可申购</div>
+      <div class="value blue">${sp.filter(f => f.status === 'open').length}只</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">全部暂停</div>
+      <div class="value red">${paused}只</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">纳指最高限额</div>
+      <div class="value green">${bestNasdaq}元</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">标普最高限额</div>
+      <div class="value blue">${bestSp}元</div>
+    </div>
+  `;
+  document.getElementById('summaryBar').innerHTML = html;
+}
+
+function applyFilters() {
+  const tab = currentTab;
+  const limitFilter = document.getElementById('filterLimit').value;
+  const sort = document.getElementById('filterSort').value;
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  let list = [...rawData];
+
+  // tab filter
+  if (tab === 'nasdaq') list = list.filter(f => f.type === 'nasdaq');
+  else if (tab === 'sp500') list = list.filter(f => f.type === 'sp500');
+
+  // limit filter
+  if (limitFilter === '500+') list = list.filter(f => f.limit >= 500);
+  else if (limitFilter === '200+') list = list.filter(f => f.limit >= 200);
+  else if (limitFilter === '100+') list = list.filter(f => f.limit >= 100);
+  else if (limitFilter === '50+') list = list.filter(f => f.limit >= 50);
+  else if (limitFilter === '10') list = list.filter(f => f.limit === 10);
+  else if (limitFilter === 'paused') list = list.filter(f => f.status === 'paused');
+  else if (limitFilter === 'open') list = list.filter(f => f.status === 'open');
+
+  // search
+  if (search) {
+    list = list.filter(f => f.name.toLowerCase().includes(search) || f.code.includes(search));
+  }
+
+  // sort
+  if (sort === 'limit-desc') list.sort((a, b) => b.limit - a.limit);
+  else if (sort === 'limit-asc') list.sort((a, b) => a.limit - b.limit);
+  else if (sort === 'return-desc') list.sort((a, b) => b.ret - a.ret);
+  else if (sort === 'return-asc') list.sort((a, b) => a.ret - b.ret);
+  else if (sort === 'scale-desc') list.sort((a, b) => b.scale - a.scale);
+
+  filtered = list;
+
+  const grid = document.getElementById('cardGrid');
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="empty-state">没有找到符合条件的基金 🧐</div>';
+  } else {
+    grid.innerHTML = filtered.map(f => renderCard(f)).join('');
+  }
+}
+
+function setTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active',
+      (tab === 'all' && i === 0) ||
+      (tab === 'nasdaq' && i === 1) ||
+      (tab === 'sp500' && i === 2));
+  });
+  applyFilters();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function refreshData() {
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true;
+  btn.textContent = '⏳ 加载中...';
+
+  try {
+    // 尝试从 feixia.org 获取最新数据
+    const resp = await fetch('https://feixia.org/', {
+      headers: { 'Accept': 'text/html' }
+    });
+    const html = await resp.text();
+
+    // 简单检测是否成功获取
+    if (html && html.length > 5000) {
+      document.getElementById('refreshTime').textContent = '数据已更新: ' + new Date().toLocaleTimeString('zh-CN');
+      document.getElementById('statusDot').classList.remove('stale');
+      showToast('✅ 数据刷新成功');
+    } else {
+      throw new Error('数据异常');
+    }
+  } catch (e) {
+    document.getElementById('refreshTime').textContent = '自动刷新失败，请手动刷新';
+    document.getElementById('statusDot').classList.add('stale');
+    showToast('⚠️ 刷新失败，请稍后重试');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔄 刷新数据';
+}
+
+// Auto-refresh every 5 minutes
+setInterval(() => {
+  if (!document.hidden) refreshData();
+}, 5 * 60 * 1000);
+
+// Init
+renderSummary();
+applyFilters();
+document.getElementById('refreshTime').textContent = '数据来源: feixia.org (2026-05-06)';
+</script>
+</body>
+</html>
