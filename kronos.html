@@ -486,6 +486,32 @@
       </div>
     </div>
 
+    <!-- LLM 分析 -->
+    <div class="section-title">🧠 LLM 趋势分析</div>
+    <div class="form-card" style="margin-bottom:20px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:200px">
+          <label>SiliconFlow API Key</label>
+          <input type="password" id="sfApiKey" placeholder="sk-xxx..." style="width:100%">
+        </div>
+        <div class="form-group" style="min-width:180px">
+          <label>模型</label>
+          <select id="sfModel" style="width:100%">
+            <option value="deepseek-v4-flash">DeepSeek-V4-Flash (推荐)</option>
+            <option value="deepseek-v4-pro">DeepSeek-V4-Pro</option>
+            <option value="kimi-k2.6">Kimi-K2.6</option>
+            <option value="glm-5.1">GLM-5.1</option>
+          </select>
+        </div>
+        <button class="btn" id="llmBtn" onclick="runLLMAnalysis()" style="margin-top:18px">▶ LLM 分析</button>
+      </div>
+      <div id="llmLoading" style="display:none;padding:20px;text-align:center;color:var(--text2)">
+        <div class="spinner" style="margin:0 auto 10px"></div>
+        <span>LLM 分析中...</span>
+      </div>
+      <div id="llmResult" style="display:none;margin-top:16px;padding:16px;background:var(--card2);border-radius:8px;white-space:pre-wrap;font-size:14px;line-height:1.8"></div>
+    </div>
+
   </div>
 </div>
 
@@ -843,6 +869,98 @@ function renderOHLCVTable(ohlcv) {
       <td><span class="tag tag-${r.signal}">${r.signal === 'long' ? '多' : r.signal === 'short' ? '空' : '观望'}</span></td>
     </tr>
   `}).join('');
+}
+
+// ── LLM 分析 ─────────────────────────────────────────────────────────────────
+let currentBacktestData = null;
+
+function runLLMAnalysis() {
+  const apiKey = document.getElementById('sfApiKey').value.trim();
+  const model = document.getElementById('sfModel').value;
+  const btn = document.getElementById('llmBtn');
+  const loading = document.getElementById('llmLoading');
+  const result = document.getElementById('llmResult');
+
+  if (!apiKey) {
+    alert('请输入 SiliconFlow API Key');
+    return;
+  }
+
+  btn.disabled = true;
+  loading.style.display = 'block';
+  result.style.display = 'none';
+
+  // 获取当前回测数据（从页面提取）
+  const meta = {
+    asset: document.querySelector('.meta-item .meta-value')?.textContent || 'N/A',
+    start: document.querySelectorAll('.meta-item .meta-value')[1]?.textContent?.split('~')[0]?.trim() || 'N/A',
+    end: document.querySelectorAll('.meta-item .meta-value')[1]?.textContent?.split('~')[1]?.trim() || 'N/A',
+  };
+
+  const metrics = {};
+  document.querySelectorAll('.metric-card').forEach(card => {
+    const label = card.querySelector('.metric-label')?.textContent;
+    const value = card.querySelector('.metric-value')?.textContent;
+    if (label && value) {
+      if (label.includes('收益率')) metrics.total_return = value;
+      if (label.includes('夏普')) metrics.sharpe = value;
+      if (label.includes('胜率')) metrics.win_rate = value;
+      if (label.includes('准确率')) metrics.dir_acc = value;
+      if (label.includes('交易次数')) metrics.total_trades = value;
+      if (label.includes('回撤')) metrics.max_dd = value;
+    }
+  });
+
+  const prompt = `你是A股量化交易分析师。基于以下回测数据，给出趋势预测和操作建议：
+
+## 回测信息
+- 标的: ${meta.asset}
+- 时间: ${meta.start} ~ ${meta.end}
+
+## 核心指标
+${Object.entries(metrics).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
+
+请给出：
+1. 策略表现分析（50字内）
+2. 下一交易日趋势预测（多/空/观望）
+3. 操作建议
+4. 风险提示
+
+回复控制在300字内，格式清晰。`;
+
+  fetch('https://api.siliconflow.cn/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: 'system', content: '你是一位专业的A股量化交易分析师。基于数据给出客观分析和建议。' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    loading.style.display = 'none';
+    result.style.display = 'block';
+    if (data.error) {
+      result.innerHTML = `<span style="color:var(--red)">❌ 错误: ${data.error.message}</span>`;
+    } else {
+      result.innerHTML = data.choices[0].message.content;
+    }
+  })
+  .catch(e => {
+    loading.style.display = 'none';
+    result.style.display = 'block';
+    result.innerHTML = `<span style="color:var(--red)">❌ 请求失败: ${e.message}</span>`;
+  })
+  .finally(() => {
+    btn.disabled = false;
+  });
 }
 </script>
 </body>
