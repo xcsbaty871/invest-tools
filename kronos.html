@@ -1,504 +1,846 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kronos 模型回测</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0a0b10;
-    --card: #13141f;
-    --border: #1e2130;
-    --text: #e4e6f0;
-    --dim: #6b7094;
-    --accent: #6366f1;
-    --green: #22c55e;
-    --red: #ef4444;
-    --yellow: #eab308;
-    --pink: #ec4899;
-    --teal: #14b8a6;
-  }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, 'PingFang SC', sans-serif;
-    min-height: 100vh;
-    padding: 20px 16px;
-  }
-  .container { max-width: 1100px; margin: 0 auto; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kronos 回测 — 均值回归 × 动量信号融合</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --card2: #1c2128;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --purple: #bc8cff;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
 
-  /* Header */
-  .top-bar {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
-  }
-  .top-bar h1 {
-    font-size: 22px; font-weight: 800;
-    background: linear-gradient(135deg, var(--accent), var(--pink));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  }
-  .meta-tag {
-    font-size: 12px; color: var(--dim);
-    background: var(--card); border: 1px solid var(--border);
-    padding: 4px 12px; border-radius: 20px;
-  }
+    /* ── Header ── */
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--text2); font-weight: 400; font-size: 14px; margin-left: 8px; }
+    nav { display: flex; gap: 4px; margin-left: auto; }
+    nav a {
+      color: var(--text2);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      transition: background 0.15s;
+    }
+    nav a:hover { background: var(--card2); color: var(--text); }
+    nav a.active { color: var(--accent); }
 
-  /* Metrics Grid */
-  .metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px; margin-bottom: 20px;
-  }
-  .metric-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 14px;
-    text-align: center;
-  }
-  .metric-label { font-size: 11px; color: var(--dim); margin-bottom: 6px; }
-  .metric-val { font-size: 22px; font-weight: 700; }
-  .metric-val.green { color: var(--green); }
-  .metric-val.red { color: var(--red); }
-  .metric-val.blue { color: var(--accent); }
-  .metric-val.yellow { color: var(--yellow); }
-  .metric-sub { font-size: 11px; color: var(--dim); margin-top: 3px; }
+    /* ── Main Layout ── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
 
-  /* Chart container */
-  .section {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 20px; margin-bottom: 16px;
-  }
-  .section-title {
-    font-size: 14px; font-weight: 700; margin-bottom: 16px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .chart-wrap { position: relative; height: 280px; }
-  .chart-wrap.tall { height: 340px; }
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .page-desc {
+      color: var(--text2);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .server-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+    }
+    .server-hint.live { background: rgba(63,185,80,0.15); color: var(--green); }
+    .server-hint.static { background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .server-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .server-hint.live .server-dot { background: var(--green); }
+    .server-hint.static .server-dot { background: var(--yellow); }
 
-  /* Params row */
-  .params {
-    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
-  }
-  .param-chip {
-    font-size: 11px; padding: 4px 10px;
-    background: rgba(99,102,241,0.1); color: var(--accent);
-    border-radius: 6px; border: 1px solid rgba(99,102,241,0.2);
-  }
+    /* ── Form ── */
+    .form-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 160px 140px auto;
+      gap: 12px;
+      align-items: end;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label {
+      font-size: 12px;
+      color: var(--text2);
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+    .form-group input, .form-group select {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--accent);
+    }
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text2);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--text2); }
 
-  /* Signal timeline */
-  .signals { display: flex; flex-direction: column; gap: 8px; }
-  .signal-item {
-    display: flex; align-items: center; gap: 12px;
-    background: rgba(255,255,255,0.02); border-radius: 10px;
-    padding: 10px 14px; border: 1px solid var(--border);
-    transition: all 0.2s;
-  }
-  .signal-item:hover { border-color: var(--accent); }
-  .signal-time { font-size: 12px; color: var(--dim); min-width: 130px; }
-  .signal-badge {
-    font-size: 12px; font-weight: 700; padding: 3px 10px;
-    border-radius: 6px; min-width: 60px; text-align: center;
-  }
-  .badge-long { background: rgba(34,197,94,0.15); color: var(--green); }
-  .badge-short { background: rgba(239,68,68,0.15); color: var(--red); }
-  .badge-neutral { background: rgba(107,112,148,0.15); color: var(--dim); }
-  .signal-conf { font-size: 12px; color: var(--dim); min-width: 50px; text-align: right; }
-  .signal-reason { font-size: 12px; color: var(--dim); flex: 1; }
-  .signal-price { font-size: 13px; font-weight: 600; min-width: 80px; text-align: right; }
+    /* Sector tabs */
+    .sector-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+    .sector-tab {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text2);
+      transition: all 0.15s;
+    }
+    .sector-tab:hover { border-color: var(--accent); color: var(--accent); }
+    .sector-tab.active {
+      background: rgba(88,166,255,0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
 
-  /* Trade table */
-  .trade-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .trade-table th {
-    text-align: left; padding: 8px 12px;
-    color: var(--dim); font-size: 11px;
-    border-bottom: 1px solid var(--border);
-    text-transform: uppercase; letter-spacing: 1px;
-  }
-  .trade-table td {
-    padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.03);
-  }
-  .trade-table tr:hover td { background: rgba(99,102,241,0.04); }
-  .trade-id { color: var(--dim); }
-  .pnl-pos { color: var(--green); font-weight: 600; }
-  .pnl-neg { color: var(--red); font-weight: 600; }
-  .trade-open { color: var(--yellow); font-size: 11px; }
+    /* ── Loading ── */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px;
+      gap: 12px;
+      color: var(--text2);
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* OHLC vs table */
-  .ohlc-compare { overflow-x: auto; }
-  .ohlc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .ohlc-table th {
-    padding: 8px 10px; color: var(--dim); font-size: 11px;
-    border-bottom: 1px solid var(--border);
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .ohlc-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
-  .ohlc-table tr:hover td { background: rgba(99,102,241,0.04); }
-  .col-header { text-align: center; font-weight: 700; }
-  .pred-col { color: var(--accent); }
-  .act-col { color: var(--green); }
-  .diff-neg { color: var(--green); }
-  .diff-pos { color: var(--red); }
+    /* ── Error ── */
+    .error-msg {
+      background: rgba(248,81,73,0.1);
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      color: var(--red);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
 
-  /* Tab switcher */
-  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-  .tab {
-    padding: 6px 16px; border-radius: 8px; font-size: 13px;
-    cursor: pointer; border: 1px solid var(--border);
-    background: transparent; color: var(--dim);
-    transition: all 0.2s;
-  }
-  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .tab:hover:not(.active) { border-color: var(--accent); color: var(--text); }
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
+    /* ── Results ── */
+    .results { display: none; }
 
-  /* Legend */
-  .legend {
-    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;
-    font-size: 12px; color: var(--dim);
-  }
-  .legend-item { display: flex; align-items: center; gap: 6px; }
-  .legend-line { width: 20px; height: 3px; border-radius: 2px; }
+    /* Meta bar */
+    .meta-bar {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-size: 13px;
+      flex-wrap: wrap;
+    }
+    .meta-item { display: flex; gap: 6px; }
+    .meta-label { color: var(--text2); }
+    .meta-value { font-weight: 600; }
+    .meta-badge {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: rgba(88,166,255,0.15);
+      color: var(--accent);
+    }
 
-  @media (max-width: 600px) {
-    .metrics { grid-template-columns: repeat(2, 1fr); }
-    .signal-item { flex-wrap: wrap; }
-    .signal-reason { width: 100%; margin-top: 4px; }
-  }
-</style>
+    /* Metrics grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .metric-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; letter-spacing: 0.3px; }
+    .metric-value { font-size: 22px; font-weight: 700; }
+    .metric-value.green { color: var(--green); }
+    .metric-value.red { color: var(--red); }
+    .metric-value.yellow { color: var(--yellow); }
+    .metric-value.purple { color: var(--purple); }
+    .metric-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+    /* Charts */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .chart-wrap { position: relative; height: 240px; }
+    .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+    /* Trades & OHLC tables */
+    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--card2);
+      color: var(--text2);
+      font-weight: 500;
+      font-size: 11px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tag-long { background: rgba(63,185,80,0.15); color: var(--green); }
+    .tag-short { background: rgba(248,81,73,0.15); color: var(--red); }
+    .tag-neutral { background: rgba(139,148,158,0.15); color: var(--text2); }
+    .pnl-pos { color: var(--green); }
+    .pnl-neg { color: var(--red); }
+
+    .table-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .table-wrap { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .form-grid { grid-template-columns: 1fr 1fr; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .container { padding: 16px; }
+    }
+
+    /* Signals timeline */
+    .signals-timeline {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 8px 0;
+      margin-bottom: 20px;
+    }
+    .signal-dot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 60px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-long { background: var(--green); }
+    .dot-short { background: var(--red); }
+    .dot-neutral { background: var(--text2); }
+    .dot-label { font-size: 10px; color: var(--text2); white-space: nowrap; }
+
+    /* Hint */
+    .hint {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 8px;
+    }
+  </style>
 </head>
 <body>
+
+<header>
+  <div class="logo">Kronos<span>均值回归 × LLM信号融合</span></div>
+  <nav>
+    <a href="index.html">首页</a>
+    <a href="kronos.html" class="active">Kronos 回测</a>
+    <a href="pork.html">猪肉股</a>
+  </nav>
+</header>
+
 <div class="container">
+  <h1 class="page-title">Kronos 策略回测</h1>
+  <p class="page-desc">基于布林带均值回归 + MACD/RSI 动量信号融合，实时拉取新浪财经 A股日线数据。</p>
+  <div id="serverHint" class="server-hint static">
+    <div class="server-dot"></div>
+    <span id="serverHintText">静态模式（启动本地服务后可自定义回测）</span>
+  </div>
+  <div id="localDataNote" style="display:none; font-size:13px; color:var(--text2); margin-bottom:16px; padding:10px 14px; background:var(--card); border:1px solid var(--border); border-radius:6px;">
+    📋 已加载本地默认数据（牧原股份 2025-06 ~ 2026-05）。点击「运行回测」连接本地服务进行自定义分析。
+  </div>
 
-  <!-- Top -->
-  <div class="top-bar">
-    <div>
-      <h1>📈 Kronos 模型回测</h1>
-      <div style="font-size:13px;color:var(--dim);margin-top:4px">
-        均值回归 + LLM 信号融合策略
+  <!-- 参数表单 -->
+  <div class="form-card">
+    <!-- 板块快捷标签 -->
+    <div class="sector-tabs" id="sectorTabs"></div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>股票代码</label>
+        <input type="text" id="stockCode" placeholder="如 000858" value="000858">
+      </div>
+      <div class="form-group">
+        <label>开始日期</label>
+        <input type="date" id="startDate">
+      </div>
+      <div class="form-group">
+        <label>结束日期</label>
+        <input type="date" id="endDate">
+      </div>
+      <div class="form-group">
+        <label>布林周期 (lookback)</label>
+        <input type="number" id="lookback" value="20" min="5" max="60">
+      </div>
+      <div class="form-group">
+        <label>温度 (temperature)</label>
+        <input type="number" id="temperature" value="0.7" min="0.1" max="1.0" step="0.1">
+      </div>
+      <button class="btn" id="runBtn" onclick="runBacktest()">▶ 运行回测</button>
+    </div>
+    <div class="hint">温度越高 → 均值回归信号权重越大；越低 → 动量信号权重越大</div>
+  </div>
+
+  <!-- 错误提示 -->
+  <div id="errorBox" class="error-msg" style="display:none"></div>
+
+  <!-- 加载中 -->
+  <div id="loadingBox" class="loading" style="display:none">
+    <div class="spinner"></div>
+    <span id="loadingText">正在拉取数据...</span>
+  </div>
+
+  <!-- 结果区 -->
+  <div id="resultsBox" class="results">
+
+    <!-- 资产信息栏 -->
+    <div class="meta-bar" id="metaBar"></div>
+
+    <!-- 指标卡片 -->
+    <div class="metrics-grid" id="metricsGrid"></div>
+
+    <!-- 图表 -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">📈 收益曲线（策略 vs 买入持有）</div>
+        <div class="chart-wrap"><canvas id="equityChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">🎯 预测 vs 实际收盘价</div>
+        <div class="chart-wrap"><canvas id="predChart"></canvas></div>
       </div>
     </div>
-    <div class="meta-tag" id="metaDate">—</div>
-  </div>
 
-  <!-- Params -->
-  <div class="section">
-    <div class="params" id="params"></div>
-  </div>
-
-  <!-- Key Metrics -->
-  <div class="metrics" id="metrics"></div>
-
-  <!-- Equity Curve -->
-  <div class="section">
-    <div class="section-title">📊 收益曲线</div>
-    <div class="chart-wrap" id="equityChart"></div>
-    <div class="legend" id="equityLegend"></div>
-  </div>
-
-  <!-- OHLC Comparison + Signals -->
-  <div class="section">
-    <div class="section-title">🎯 预测 vs 实际</div>
-    <div class="chart-wrap" id="ohlcChart"></div>
-    <div class="legend" id="ohlcLegend"></div>
-  </div>
-
-  <!-- Tabs: Signals / Trades / Data -->
-  <div class="section">
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('signals')">交易信号</div>
-      <div class="tab" onclick="switchTab('trades')">交易记录</div>
-      <div class="tab" onclick="switchTab('ohlc-data')">预测数据</div>
-    </div>
-
-    <div class="tab-panel active" id="tab-signals">
-      <div class="signals" id="signalsList"></div>
-    </div>
-
-    <div class="tab-panel" id="tab-trades">
-      <table class="trade-table">
-        <thead>
-          <tr>
-            <th>#</th><th>入场时间</th><th>方向</th>
-            <th>入场价</th><th>出场价</th>
-            <th>浮盈</th><th>持仓</th>
-          </tr>
-        </thead>
-        <tbody id="tradesBody"></tbody>
-      </table>
-    </div>
-
-    <div class="tab-panel" id="tab-ohlc-data">
-      <div class="ohlc-compare">
-        <table class="ohlc-table" id="ohlcTable"></table>
+    <!-- 信号时间轴 -->
+    <div class="table-card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>时间</th>
+            <th>信号</th>
+            <th>置信度</th>
+            <th>价格</th>
+            <th>理由</th>
+          </tr></thead>
+          <tbody id="signalsTable"></tbody>
+        </table>
       </div>
     </div>
-  </div>
 
+    <!-- 交易记录 -->
+    <div class="section-title">📋 交易记录</div>
+    <div class="table-card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th>
+            <th>入场时间</th>
+            <th>出场时间</th>
+            <th>方向</th>
+            <th>入场价</th>
+            <th>出场价</th>
+            <th>盈亏额</th>
+            <th>盈亏率</th>
+            <th>持仓时长</th>
+          </tr></thead>
+          <tbody id="tradesTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- OHLC 预测数据 -->
+    <div class="section-title">📊 OHLC 预测 vs 实际（最近 30 期）</div>
+    <div class="table-card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>时间</th>
+            <th>预测收盘</th>
+            <th>实际收盘</th>
+            <th>预测偏差</th>
+            <th>信号</th>
+          </tr></thead>
+          <tbody id="ohlcvTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script>
-// ── Data ─────────────────────────────────────────────────────────────────────
-const DATA = {
-  "meta": {"name":"Kronos 模型预测回测","description":"均值回归 + LLM 信号融合策略","last_updated":"2026-05-06","asset":"BTC/USDT 5m","lookback":400,"pred_len":120,"temperature":0.7},
-  "prediction": {"start":"2025-08-06T19:05:00","end":"2025-08-07T05:05:00","timeframe":"5min","lookback":400,"last_input_close":114080.07,"last_input_high":114133.37,"last_input_low":114067.20},
-  "metrics": {"mae":387.42,"rmse":512.63,"mape":0.34,"directional_accuracy":58.3,"pred_total_return":1.24,"actual_total_return":1.27},
-  "equity_curve":[{"date":"2025-08-01","strategy":10000,"benchmark":10000},{"date":"2025-08-02","strategy":10234,"benchmark":10085},{"date":"2025-08-03","strategy":10187,"benchmark":10052},{"date":"2025-08-04","strategy":10521,"benchmark":10120},{"date":"2025-08-05","strategy":10843,"benchmark":10178},{"date":"2025-08-06","strategy":11012,"benchmark":10245},{"date":"2025-08-07","strategy":11205,"benchmark":10289},{"date":"2025-08-08","strategy":10987,"benchmark":10156},{"date":"2025-08-09","strategy":11342,"benchmark":10234},{"date":"2025-08-10","strategy":11678,"benchmark":10301}],
-  "ohlcv":[{"t":"2025-08-06T19:05","pred_o":115116.91,"pred_h":115147.84,"pred_l":114797.73,"pred_c":114761.07,"act_o":114080.08,"act_h":114138.42,"act_l":114007.86,"act_c":114007.86},{"t":"2025-08-06T19:10","pred_o":114693.86,"pred_h":114838.31,"pred_l":114457.23,"pred_c":114513.23,"act_o":114007.87,"act_h":114139.75,"act_l":114007.85,"act_c":114139.74},{"t":"2025-08-06T19:15","pred_o":114550.66,"pred_h":114645.05,"pred_l":114381.20,"pred_c":114420.05,"act_o":114139.74,"act_h":114215.10,"act_l":114139.74,"act_c":114215.09},{"t":"2025-08-06T19:20","pred_o":114615.60,"pred_h":114676.26,"pred_l":114376.87,"pred_c":114402.49,"act_o":114215.09,"act_h":114242.67,"act_l":114169.41,"act_c":114215.10},{"t":"2025-08-06T19:25","pred_o":114531.09,"pred_h":114581.72,"pred_l":114236.19,"pred_c":114344.68,"act_o":114215.09,"act_h":114242.53,"act_l":114207.97,"act_c":114240.70},{"t":"2025-08-06T19:30","pred_o":114657.27,"pred_h":114601.85,"pred_l":114245.34,"pred_c":114260.10,"act_o":114240.71,"act_h":114404.23,"act_l":114240.71,"act_c":114306.39},{"t":"2025-08-06T19:35","pred_o":114476.49,"pred_h":114549.07,"pred_l":114223.44,"pred_c":114267.89,"act_o":114306.39,"act_h":114350.42,"act_l":114297.14,"act_c":114350.41},{"t":"2025-08-06T19:40","pred_o":114476.50,"pred_h":114437.42,"pred_l":114236.04,"pred_c":114242.73,"act_o":114350.41,"act_h":114350.42,"act_l":114270.15,"act_c":114315.08},{"t":"2025-08-06T19:45","pred_o":114490.52,"pred_h":114486.35,"pred_l":114271.66,"pred_c":114262.39,"act_o":114315.08,"act_h":114315.09,"act_l":114223.57,"act_c":114223.57},{"t":"2025-08-06T19:50","pred_o":114566.98,"pred_h":114528.36,"pred_l":114183.03,"pred_c":114193.80,"act_o":114223.57,"act_h":114223.57,"act_l":114187.99,"act_c":114204.99},{"t":"2025-08-06T19:55","pred_o":114286.40,"pred_h":114422.11,"pred_l":114130.91,"pred_c":114132.07,"act_o":114205.00,"act_h":114226.69,"act_l":114170.69,"act_c":114226.69},{"t":"2025-08-06T20:00","pred_o":114477.02,"pred_h":114439.08,"pred_l":114180.95,"pred_c":114172.65,"act_o":114226.68,"act_h":114332.88,"act_l":114226.68,"act_c":114332.88},{"t":"2025-08-06T20:05","pred_o":114388.91,"pred_h":114465.45,"pred_l":114250.97,"pred_c":114270.20,"act_o":114332.88,"act_h":114333.59,"act_l":114245.99,"act_c":114246.03},{"t":"2025-08-06T20:10","pred_o":114489.55,"pred_h":114417.77,"pred_l":114210.23,"pred_c":114229.03,"act_o":114246.02,"act_h":114246.02,"act_l":113933.52,"act_c":113955.95},{"t":"2025-08-06T20:15","pred_o":114282.05,"pred_h":114307.32,"pred_l":114153.20,"pred_c":114166.18,"act_o":113955.95,"act_h":114126.27,"act_l":113809.02,"act_c":114126.27},{"t":"2025-08-06T20:20","pred_o":114528.72,"pred_h":114477.68,"pred_l":114287.23,"pred_c":114237.09,"act_o":114126.26,"act_h":114196.00,"act_l":114111.47,"act_c":114143.46},{"t":"2025-08-06T20:25","pred_o":114321.16,"pred_h":114398.58,"pred_l":114229.23,"pred_c":114220.22,"act_o":114143.46,"act_h":114143.46,"act_l":114064.80,"act_c":114067.20},{"t":"2025-08-06T20:30","pred_o":114393.27,"pred_h":114368.78,"pred_l":114190.46,"pred_c":114179.41,"act_o":114067.21,"act_h":114226.69,"act_l":114060.03,"act_c":114225.99},{"t":"2025-08-06T20:35","pred_o":114336.36,"pred_h":114399.42,"pred_l":114159.36,"pred_c":114163.52,"act_o":114226.00,"act_h":114255.00,"act_l":114188.63,"act_c":114212.38},{"t":"2025-08-06T20:40","pred_o":114437.27,"pred_h":114450.56,"pred_l":114128.14,"pred_c":114161.32,"act_o":114212.38,"act_h":114220.00,"act_l":114060.49,"act_c":114060.49}],
-  "signals":[{"time":"2025-08-06T19:05","signal":"neutral","confidence":0.52,"price":114080.07,"reason":"无显著偏离"},{"time":"2025-08-06T19:15","signal":"short","confidence":0.61,"price":114215.09,"reason":"价格偏离均值+2.1%"},{"time":"2025-08-06T19:30","signal":"long","confidence":0.58,"price":114240.71,"reason":"回踩支撑位"},{"time":"2025-08-06T19:45","signal":"short","confidence":0.65,"price":114315.08,"reason":"高位震荡+成交量放大"},{"time":"2025-08-06T20:05","signal":"neutral","confidence":0.50,"price":114332.88,"reason":"方向不明"},{"time":"2025-08-06T20:20","signal":"long","confidence":0.63,"price":114143.46,"reason":"下破后快速反弹"},{"time":"2025-08-06T20:35","signal":"long","confidence":0.71,"price":114212.38,"reason":"连续阳线+量能配合"},{"time":"2025-08-06T20:45","signal":"short","confidence":0.67,"price":114060.49,"reason":"高位背离"}],
-  "trades":[{"id":1,"entry":"2025-08-06T19:30","exit":"2025-08-06T19:45","side":"long","entry_price":114240.71,"exit_price":114315.08,"pnl":74.37,"pnl_pct":0.65,"holding":"15min"},{"id":2,"entry":"2025-08-06T20:20","exit":"2025-08-06T20:40","side":"long","entry_price":114143.46,"exit_price":114060.49,"pnl":-82.97,"pnl_pct":-0.73,"holding":"20min"},{"id":3,"entry":"2025-08-06T20:35","exit":"2025-08-07T02:00","side":"long","entry_price":114212.38,"exit_price":115661.21,"pnl":1448.83,"pnl_pct":1.27,"holding":"5.4h"},{"id":4,"entry":"2025-08-07T02:30","exit":"","side":"short","entry_price":115426.66,"exit_price":"","pnl":0,"pnl_pct":0,"holding":"开仓中"}]
-};
+// ── 全局状态 ─────────────────────────────────────────────────────────────────
+let stocks = [];
+let equityChart = null;
+let predChart = null;
+const SERVER = 'http://127.0.0.1:5555';
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-document.getElementById('metaDate').textContent =
-  `数据更新: ${DATA.meta.last_updated} · ${DATA.meta.asset}`;
+// ── 初始化 ───────────────────────────────────────────────────────────────────
+// 静态模式默认股列表（服务不可用时使用）
+const STATIC_STOCKS = [
+  {code:'002714',name:'牧原股份',sector:'猪肉'},
+  {code:'000858',name:'五粮液',sector:'白酒'},
+  {code:'600519',name:'贵州茅台',sector:'白酒'},
+  {code:'600900',name:'长江电力',sector:'电力'},
+  {code:'002460',name:'赣锋锂业',sector:'有色'},
+  {code:'516670',name:'畜牧ETF',sector:'ETF'},
+];
 
-document.getElementById('params').innerHTML = [
-  `资产: ${DATA.meta.asset}`,
-  `时间粒度: ${DATA.prediction.timeframe}`,
-  `回看窗口: ${DATA.prediction.lookback}`,
-  `预测长度: ${DATA.prediction.pred_len}`,
-  `Temperature: ${DATA.prediction.temperature}`,
-  `起始价格: ${DATA.prediction.last_input_close.toLocaleString()}`
-].map(p => `<span class="param-chip">${p}</span>`).join('');
-
-// ── Metrics ───────────────────────────────────────────────────────────────────
-const m = DATA.metrics;
-const stratRet = DATA.equity_curve[DATA.equity_curve.length-1].strategy - 10000;
-const benchRet = DATA.equity_curve[DATA.equity_curve.length-1].benchmark - 10000;
-const alpha = (stratRet - benchRet).toFixed(0);
-
-document.getElementById('metrics').innerHTML = [
-  {label:'夏普比率', val:'1.85', cls:'green', sub:'年化'},
-  {label:'策略收益率', val:'+16.8%', cls:'green', sub:'区间总收益'},
-  {label:'基准收益', val:'+3.0%', cls:'blue', sub:'同期买入持有'},
-  {label:'超额收益', val:`+${alpha}%`, cls:'green', sub:'Alpha'},
-  {label:'最大回撤', val:'-8.2%', cls:'red', sub:'区间最大'},
-  {label:'胜率', val:'66.7%', cls:'blue', sub:'交易胜率'},
-  {label:'MAE', val:`${m.mae.toFixed(0)}`, cls:'yellow', sub:'均价绝对误差'},
-  {label:'方向准确率', val:`${m.directional_accuracy}%`, cls:'blue', sub:'涨跌方向'},
-].map(x => `
-  <div class="metric-card">
-    <div class="metric-label">${x.label}</div>
-    <div class="metric-val ${x.cls}">${x.val}</div>
-    <div class="metric-sub">${x.sub}</div>
-  </div>`).join('');
-
-// ── Equity Curve Chart ────────────────────────────────────────────────────────
-const eqLabels = DATA.equity_curve.map(d => d.date);
-const stratData = DATA.equity_curve.map(d => d.strategy);
-const benchData = DATA.equity_curve.map(d => d.benchmark);
-
-new Chart(document.getElementById('equityChart'), {
-  type: 'line',
-  data: {
-    labels: eqLabels,
-    datasets: [
-      {
-        label: 'Kronos 策略',
-        data: stratData,
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99,102,241,0.08)',
-        borderWidth: 2.5,
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-      },
-      {
-        label: '买入持有',
-        data: benchData,
-        borderColor: '#22c55e',
-        backgroundColor: 'rgba(34,197,94,0.05)',
-        borderWidth: 1.5,
-        fill: true,
-        tension: 0.3,
-        pointRadius: 2,
-        pointHoverRadius: 4,
-        borderDash: [4, 4],
-      }
-    ]
-  },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#1a1d27',
-        borderColor: '#2a2d3a',
-        borderWidth: 1,
-        titleColor: '#e4e6f0',
-        bodyColor: '#7a7f9a',
-        callbacks: {
-          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`
-        }
-      }
-    },
-    scales: {
-      x: {
-        grid: { color: 'rgba(255,255,255,0.04)' },
-        ticks: { color: '#6b7094', font: { size: 11 } }
-      },
-      y: {
-        grid: { color: 'rgba(255,255,255,0.04)' },
-        ticks: { color: '#6b7094', font: { size: 11 },
-          callback: v => v.toLocaleString() }
-      }
+document.addEventListener('DOMContentLoaded', async () => {
+  // 尝试连接本地服务
+  let serverLive = false;
+  try {
+    const res = await fetch(`${SERVER}/api/kronos/presets`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const data = await res.json();
+      stocks = data.stocks;
+      const range = data.default_range;
+      document.getElementById('startDate').value = range.start;
+      document.getElementById('endDate').value = range.end;
+      serverLive = true;
     }
+  } catch (e) {
+    // 服务不可用
+  }
+
+  if (serverLive) {
+    document.getElementById('serverHint').className = 'server-hint live';
+    document.getElementById('serverHintText').textContent = '服务已连接 — 可进行自定义回测';
+    renderSectorTabs(stocks);
+  } else {
+    stocks = STATIC_STOCKS;
+    // 加载本地静态数据
+    try {
+      const res = await fetch('data/kronos-latest.json');
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById('localDataNote').style.display = 'block';
+        document.getElementById('resultsBox').style.display = 'block';
+        renderResults(data);
+        document.getElementById('stockCode').value = data.meta.asset.replace('sz','').replace('sh','') || '002714';
+        document.getElementById('startDate').value = data.meta.start_date;
+        document.getElementById('endDate').value = data.meta.end_date;
+      }
+    } catch (e) { /* 静默 */ }
+    renderSectorTabs(stocks);
   }
 });
 
-document.getElementById('equityLegend').innerHTML = [
-  {color:'#6366f1', text:'Kronos 策略'},
-  {color:'#22c55e', text:'买入持有 (虚线)'},
-].map(l => `<div class="legend-item"><div class="legend-line" style="background:${l.color}"></div>${l.text}</div>`).join('');
+function renderSectorTabs(stocks) {
+  const sectors = [...new Set(stocks.map(s => s.sector))];
+  const tabsEl = document.getElementById('sectorTabs');
+  tabsEl.innerHTML = '';
+  const allTab = document.createElement('button');
+  allTab.className = 'sector-tab active';
+  allTab.textContent = '全部';
+  allTab.onclick = () => selectSector(null, allTab);
+  tabsEl.appendChild(allTab);
+  sectors.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'sector-tab';
+    btn.textContent = s;
+    btn.onclick = () => selectSector(s, btn);
+    tabsEl.appendChild(btn);
+  });
+  // 默认选中猪肉
+  const porkTab = [...tabsEl.querySelectorAll('.sector-tab')].find(b => b.textContent === '猪肉');
+  if (porkTab) selectSector('猪肉', porkTab);
+}
 
-// ── OHLC Comparison Chart ─────────────────────────────────────────────────────
-const ohlcLabels = DATA.ohlcv.map(d => d.t.replace('T',' ').slice(0,16));
-const predClose = DATA.ohlcv.map(d => d.pred_c);
-const actClose = DATA.ohlcv.map(d => d.act_c);
+function selectSector(sector, btn) {
+  document.querySelectorAll('.sector-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = stocks.filter(s => !sector || s.sector === sector);
+  if (filtered.length) {
+    document.getElementById('stockCode').value = filtered[0].code;
+  }
+}
 
-new Chart(document.getElementById('ohlcChart'), {
-  type: 'line',
-  data: {
-    labels: ohlcLabels,
-    datasets: [
-      {
-        label: '预测收盘价',
-        data: predClose,
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99,102,241,0.1)',
-        borderWidth: 2,
-        fill: false,
-        tension: 0.2,
-        pointRadius: 2,
-        pointHoverRadius: 5,
-      },
-      {
-        label: '实际收盘价',
-        data: actClose,
-        borderColor: '#22c55e',
-        backgroundColor: 'rgba(34,197,94,0.1)',
-        borderWidth: 2,
-        fill: false,
-        tension: 0.2,
-        pointRadius: 2,
-        pointHoverRadius: 5,
-      }
-    ]
-  },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#1a1d27',
-        borderColor: '#2a2d3a',
-        borderWidth: 1,
-        callbacks: {
-          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString(undefined,{minimumFractionDigits:2})}`
+// ── 运行回测 ─────────────────────────────────────────────────────────────────
+async function runBacktest() {
+  const btn = document.getElementById('runBtn');
+  const errorBox = document.getElementById('errorBox');
+  const loadingBox = document.getElementById('loadingBox');
+  const resultsBox = document.getElementById('resultsBox');
+  const loadingText = document.getElementById('loadingText');
+
+  errorBox.style.display = 'none';
+  resultsBox.style.display = 'none';
+  loadingBox.style.display = 'flex';
+  loadingText.textContent = '正在拉取数据...';
+  btn.disabled = true;
+  btn.textContent = '运行中...';
+
+  const params = {
+    stock: document.getElementById('stockCode').value.trim(),
+    start: document.getElementById('startDate').value,
+    end: document.getElementById('endDate').value,
+    lookback: parseInt(document.getElementById('lookback').value),
+    temperature: parseFloat(document.getElementById('temperature').value),
+    pred_len: 30
+  };
+
+  try {
+    loadingText.textContent = '正在回测计算...';
+    const res = await fetch(`${SERVER}/api/kronos/backtest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '回测失败');
+
+    loadingBox.style.display = 'none';
+    resultsBox.style.display = 'block';
+    renderResults(data);
+
+  } catch (e) {
+    loadingBox.style.display = 'none';
+    errorBox.style.display = 'block';
+    errorBox.textContent = `❌ ${e.message}。请确保已启动 Kronos 服务：python3 kronos_server.py`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ 运行回测';
+  }
+}
+
+// ── 渲染结果 ─────────────────────────────────────────────────────────────────
+function renderResults(data) {
+  const m = data.metrics;
+
+  // Meta bar
+  document.getElementById('metaBar').innerHTML = `
+    <div class="meta-item"><span class="meta-label">标的</span><span class="meta-value">${data.meta.asset}</span></div>
+    <div class="meta-item"><span class="meta-label">数据范围</span><span class="meta-value">${data.meta.start_date} ~ ${data.meta.end_date}</span></div>
+    <div class="meta-item"><span class="meta-label">数据点</span><span class="meta-value">${data.equity_curve.length} 条</span></div>
+    <div class="meta-item"><span class="meta-label">布林周期</span><span class="meta-value">${data.meta.lookback}</span></div>
+    <div class="meta-item"><span class="meta-label">温度</span><span class="meta-value">${data.meta.temperature}</span></div>
+    <div class="meta-badge">最后更新: ${data.meta.last_updated}</div>
+  `;
+
+  // Metrics cards
+  const totalRetClass = m.total_return >= 0 ? 'green' : 'red';
+  const sharpeClass = m.sharpe_ratio >= 1 ? 'green' : m.sharpe_ratio >= 0 ? 'yellow' : 'red';
+  const winClass = m.win_rate >= 60 ? 'green' : m.win_rate >= 40 ? 'yellow' : 'red';
+
+  document.getElementById('metricsGrid').innerHTML = `
+    <div class="metric-card">
+      <div class="metric-label">策略收益率</div>
+      <div class="metric-value ${totalRetClass}">${m.total_return >= 0 ? '+' : ''}${m.total_return}%</div>
+      <div class="metric-sub">基准 ${m.benchmark_return >= 0 ? '+' : ''}${m.benchmark_return}%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">夏普比率</div>
+      <div class="metric-value ${sharpeClass}">${m.sharpe_ratio}</div>
+      <div class="metric-sub">年化波动率调整</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">胜率</div>
+      <div class="metric-value ${winClass}">${m.win_rate}%</div>
+      <div class="metric-sub">${m.wins}胜 / ${m.losses}负</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">方向准确率</div>
+      <div class="metric-value ${m.directional_accuracy >= 55 ? 'green' : m.directional_accuracy >= 45 ? 'yellow' : 'red'}">${m.directional_accuracy}%</div>
+      <div class="metric-sub">预测 vs 实际次日期涨跌</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">总交易次数</div>
+      <div class="metric-value purple">${m.total_trades}</div>
+      <div class="metric-sub">开平仓合计</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">MAE（均价偏差）</div>
+      <div class="metric-value">${m.mae}</div>
+      <div class="metric-sub">预测误差均值</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">最大回撤</div>
+      <div class="metric-value red">${m.max_drawdown}%</div>
+      <div class="metric-sub">策略历史最大回撤</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">总盈亏</div>
+      <div class="metric-value ${m.total_pnl >= 0 ? 'green' : 'red'}">${m.total_pnl >= 0 ? '+' : ''}${m.total_pnl}</div>
+      <div class="metric-sub">绝对收益额</div>
+    </div>
+  `;
+
+  // Equity chart
+  renderEquityChart(data.equity_curve);
+
+  // Prediction chart
+  renderPredChart(data.ohlcv);
+
+  // Signals table
+  renderSignalsTable(data.signals);
+
+  // Trades table
+  renderTradesTable(data.trades);
+
+  // OHLCV table
+  renderOHLCVTable(data.ohlcv);
+}
+
+function renderEquityChart(equityData) {
+  const ctx = document.getElementById('equityChart').getContext('2d');
+  if (equityChart) equityChart.destroy();
+
+  equityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: equityData.map(d => d.date),
+      datasets: [
+        {
+          label: '策略',
+          data: equityData.map(d => d.strategy),
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,0.1)',
+          fill: true,
+          tension: 0.2,
+          borderWidth: 2,
+          pointRadius: 0,
+        },
+        {
+          label: '买入持有',
+          data: equityData.map(d => d.benchmark),
+          borderColor: '#8b949e',
+          fill: false,
+          tension: 0.2,
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          pointRadius: 0,
         }
-      }
+      ]
     },
-    scales: {
-      x: {
-        grid: { color: 'rgba(255,255,255,0.04)' },
-        ticks: { color: '#6b7094', font: { size: 10 }, maxTicksLimit: 10 }
-      },
-      y: {
-        grid: { color: 'rgba(255,255,255,0.04)' },
-        ticks: { color: '#6b7094', font: { size: 11 },
-          callback: v => v.toLocaleString() }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+      scales: {
+        x: { grid: { color: 'rgba(48,54,61,0.5)' }, ticks: { color: '#8b949e', maxTicksLimit: 8, font: { size: 10 } } },
+        y: { grid: { color: 'rgba(48,54,61,0.5)' }, ticks: { color: '#8b949e', font: { size: 10 } } }
       }
     }
-  }
-});
+  });
+}
 
-document.getElementById('ohlcLegend').innerHTML = [
-  {color:'#6366f1', text:'Kronos 预测收盘'},
-  {color:'#22c55e', text:'实际收盘'},
-].map(l => `<div class="legend-item"><div class="legend-line" style="background:${l.color}"></div>${l.text}</div>`).join('');
+function renderPredChart(ohlcvData) {
+  const ctx = document.getElementById('predChart').getContext('2d');
+  if (predChart) predChart.destroy();
 
-// ── Signals ────────────────────────────────────────────────────────────────────
-document.getElementById('signalsList').innerHTML = DATA.signals.map(s => {
-  const cls = s.signal === 'long' ? 'badge-long' : s.signal === 'short' ? 'badge-short' : 'badge-neutral';
-  const label = s.signal === 'long' ? '多头' : s.signal === 'short' ? '空头' : '观望';
-  return `
-    <div class="signal-item">
-      <div class="signal-time">${s.time.replace('T',' ').slice(0,16)}</div>
-      <div class="signal-badge ${cls}">${label}</div>
-      <div class="signal-conf">${(s.confidence*100).toFixed(0)}%</div>
-      <div class="signal-price">${s.price.toLocaleString()}</div>
-      <div class="signal-reason">${s.reason}</div>
-    </div>`;
-}).join('');
+  // 颜色按信号分
+  const colors = ohlcvData.map(d =>
+    d.signal === 'long' ? 'rgba(63,185,80,0.7)' :
+    d.signal === 'short' ? 'rgba(248,81,73,0.7)' :
+    'rgba(139,148,158,0.5)'
+  );
 
-// ── Trades ─────────────────────────────────────────────────────────────────────
-document.getElementById('tradesBody').innerHTML = DATA.trades.map(t => {
-  const pnlCls = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
-  const pnlStr = t.pnl > 0 ? `+${t.pnl.toFixed(2)}` : t.pnl.toFixed(2);
-  const sideCls = t.side === 'long' ? 'badge-long' : 'badge-short';
-  const sideLabel = t.side === 'long' ? '多' : '空';
-  const exitStr = t.exit_price === '' ? '<span class="trade-open">开仓中</span>' : t.exit_price.toLocaleString();
-  return `
+  predChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ohlcvData.map(d => d.t.slice(5)), // MM-DD
+      datasets: [
+        {
+          label: '预测收盘',
+          data: ohlcvData.map(d => d.pred_c),
+          backgroundColor: colors,
+          borderRadius: 2,
+        },
+        {
+          label: '实际收盘',
+          data: ohlcvData.map(d => d.act_c),
+          type: 'line',
+          borderColor: '#d29922',
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: 2,
+          pointBackgroundColor: '#d29922',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+      scales: {
+        x: { grid: { color: 'rgba(48,54,61,0.5)' }, ticks: { color: '#8b949e', maxTicksLimit: 10, font: { size: 10 } } },
+        y: { grid: { color: 'rgba(48,54,61,0.5)' }, ticks: { color: '#8b949e', font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderSignalsTable(signals) {
+  const tbody = document.getElementById('signalsTable');
+  tbody.innerHTML = signals.map(s => `
     <tr>
-      <td class="trade-id">#${t.id}</td>
-      <td>${t.entry.replace('T',' ').slice(0,16)}</td>
-      <td><span class="signal-badge ${sideCls}">${sideLabel}</span></td>
-      <td>${t.entry_price.toLocaleString()}</td>
-      <td>${exitStr}</td>
-      <td class="${pnlCls}">${pnlStr} (${t.pnl_pct > 0 ? '+' : ''}${t.pnl_pct}%)</td>
+      <td>${s.time}</td>
+      <td><span class="tag tag-${s.signal}">${s.signal === 'long' ? '多' : s.signal === 'short' ? '空' : '观望'}</span></td>
+      <td>${(s.confidence * 100).toFixed(0)}%</td>
+      <td>${s.price}</td>
+      <td style="color:var(--text2);font-size:12px">${s.reason}</td>
+    </tr>
+  `).join('');
+}
+
+function renderTradesTable(trades) {
+  const tbody = document.getElementById('tradesTable');
+  if (!trades.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text2);text-align:center;padding:20px">暂无交易记录</td></tr>';
+    return;
+  }
+  tbody.innerHTML = trades.map(t => `
+    <tr>
+      <td>${t.id}</td>
+      <td>${t.entry}</td>
+      <td>${t.exit || '—'}</td>
+      <td><span class="tag tag-${t.side}">${t.side === 'long' ? '多' : '空'}</span></td>
+      <td>${t.entry_price}</td>
+      <td>${t.exit_price || '—'}</td>
+      <td class="${t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl >= 0 ? '+' : ''}${t.pnl}</td>
+      <td class="${t.pnl_pct >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct}%</td>
       <td>${t.holding}</td>
-    </tr>`;
-}).join('');
-
-// ── OHLC Table ─────────────────────────────────────────────────────────────────
-const tableRows = DATA.ohlcv.map((r, i) => {
-  const diff = r.pred_c - r.act_c;
-  const diffPct = ((diff / r.act_c) * 100).toFixed(2);
-  const diffCls = diff < 0 ? 'diff-neg' : 'diff-pos';
-  return `
-    <tr>
-      <td>${r.t.replace('T',' ').slice(0,16)}</td>
-      <td class="pred-col">${r.pred_o.toFixed(2)}</td>
-      <td class="pred-col">${r.pred_h.toFixed(2)}</td>
-      <td class="pred-col">${r.pred_l.toFixed(2)}</td>
-      <td class="pred-col">${r.pred_c.toFixed(2)}</td>
-      <td class="act-col">${r.act_o.toFixed(2)}</td>
-      <td class="act-col">${r.act_h.toFixed(2)}</td>
-      <td class="act-col">${r.act_l.toFixed(2)}</td>
-      <td class="act-col">${r.act_c.toFixed(2)}</td>
-      <td class="${diffCls}">${diff > 0 ? '+' : ''}${diffPct}%</td>
-    </tr>`;
-}).join('');
-
-document.getElementById('ohlcTable').innerHTML = `
-  <thead>
-    <tr>
-      <th>时间</th>
-      <th colspan="4" class="col-header pred-col">预测</th>
-      <th colspan="4" class="col-header act-col">实际</th>
-      <th>偏差</th>
     </tr>
-    <tr>
-      <th></th>
-      <th>O</th><th>H</th><th>L</th><th>C</th>
-      <th>O</th><th>H</th><th>L</th><th>C</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>${tableRows}</tbody>`;
+  `).join('');
+}
 
-// ── Tab Switcher ────────────────────────────────────────────────────────────────
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelector(`.tab[onclick="switchTab('${name}')"]`).classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
+function renderOHLCVTable(ohlcv) {
+  const tbody = document.getElementById('ohlcvTable');
+  tbody.innerHTML = ohlcv.map(r => {
+    const diff = r.pred_c - r.act_c;
+    const diffPct = r.act_c ? (diff / r.act_c * 100) : 0;
+    return `
+    <tr>
+      <td>${r.t}</td>
+      <td>${r.pred_c}</td>
+      <td>${r.act_c}</td>
+      <td class="${diff >= 0 ? 'pnl-pos' : 'pnl-neg'}">${diff >= 0 ? '+' : ''}${diff.toFixed(2)} (${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}%)</td>
+      <td><span class="tag tag-${r.signal}">${r.signal === 'long' ? '多' : r.signal === 'short' ? '空' : '观望'}</span></td>
+    </tr>
+  `}).join('');
 }
 </script>
 </body>
