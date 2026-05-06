@@ -497,10 +497,10 @@
         <div class="form-group" style="min-width:180px">
           <label>模型</label>
           <select id="sfModel" style="width:100%">
-            <option value="deepseek-v4-flash">DeepSeek-V4-Flash (推荐)</option>
-            <option value="deepseek-v4-pro">DeepSeek-V4-Pro</option>
-            <option value="kimi-k2.6">Kimi-K2.6</option>
-            <option value="glm-5.1">GLM-5.1</option>
+            <option value="deepseek-ai/DeepSeek-V4-Flash">DeepSeek-V4-Flash (推荐)</option>
+            <option value="deepseek-ai/DeepSeek-V4-Pro">DeepSeek-V4-Pro</option>
+            <option value="moonshotai/Kimi-K2.6">Kimi-K2.6</option>
+            <option value="zai-org/GLM-5.1">GLM-5.1</option>
           </select>
         </div>
         <button class="btn" id="llmBtn" onclick="runLLMAnalysis()" style="margin-top:18px">▶ LLM 分析</button>
@@ -935,7 +935,7 @@ ${Object.entries(metrics).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
 
 回复控制在300字内，格式清晰。`;
 
-  fetch('https://api.siliconflow.cn/v1/chat/completions', {
+  fetch('https://api.siliconflow.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -957,7 +957,7 @@ ${Object.entries(metrics).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
     if (data.error) {
       result.innerHTML = `<span style="color:var(--red)">❌ 错误: ${data.error.message}</span>`;
     } else {
-      result.innerHTML = data.choices[0].message.content;
+      result.innerHTML = data.choices?.[0]?.message?.content || '分析失败，请检查API Key或模型是否可用';
     }
   })
   .catch(e => {
