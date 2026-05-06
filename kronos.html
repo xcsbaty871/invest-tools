@@ -886,15 +886,22 @@ function runLLMAnalysis() {
     return;
   }
 
+  // 检查是否有回测数据
+  const metaValues = document.querySelectorAll('.meta-item .meta-value');
+  if (metaValues.length === 0) {
+    alert('请先运行回测或加载数据');
+    return;
+  }
+
   btn.disabled = true;
   loading.style.display = 'block';
   result.style.display = 'none';
 
   // 获取当前回测数据（从页面提取）
   const meta = {
-    asset: document.querySelector('.meta-item .meta-value')?.textContent || 'N/A',
-    start: document.querySelectorAll('.meta-item .meta-value')[1]?.textContent?.split('~')[0]?.trim() || 'N/A',
-    end: document.querySelectorAll('.meta-item .meta-value')[1]?.textContent?.split('~')[1]?.trim() || 'N/A',
+    asset: metaValues[0]?.textContent || 'N/A',
+    start: metaValues[1]?.textContent?.split('~')[0]?.trim() || 'N/A',
+    end: metaValues[1]?.textContent?.split('~')[1]?.trim() || 'N/A',
   };
 
   const metrics = {};
